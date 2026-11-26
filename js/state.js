@@ -1,6 +1,6 @@
 // 앱 전역 상태와 권한 도우미
 // 권한: owner(운영담당자) > admin(관리자) > user(로그인 사용자)
-import { DEFAULT_SITE, DEFAULT_BANNERS, DEFAULT_QUESTIONS, UPLOAD_LIMITS } from "./config.js?v=202611261551";
+import { DEFAULT_SITE, DEFAULT_BANNERS, DEFAULT_QUESTIONS, UPLOAD_LIMITS, OWNER_CONSOLE_KEY } from "./config.js?v=202611261642";
 
 export const S = {
   api: null,
@@ -9,6 +9,7 @@ export const S = {
   banners: [],          // 메인 배너 (config/hero_banners.items 중 표시 중인 것)
   allBanners: [],
   questionList: DEFAULT_QUESTIONS.map((q) => ({ ...q })),
+  owners: [],
   calMonth: null,
   calSel: null,
   login: null,
@@ -47,6 +48,19 @@ export async function loadBanners() {
     console.warn("banners", e);
     S.allBanners = []; S.banners = [];
   }
+}
+
+// 운영담당자 목록 (config/owners.emails) — 홈 화면 비밀번호 콘솔에서 관리
+export async function loadOwners() {
+  try { const d = await S.api.get("config", "owners"); S.owners = Array.isArray(d?.emails) ? d.emails : []; }
+  catch { S.owners = []; }
+  return S.owners;
+}
+export async function saveOwners(emails) {
+  const list = [...new Set(emails.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
+  await S.api.set("config", "owners", { emails: list, key: OWNER_CONSOLE_KEY, updatedAt: S.api.now() }, false);
+  S.owners = list;
+  return list;
 }
 
 export async function saveBanners(items) {

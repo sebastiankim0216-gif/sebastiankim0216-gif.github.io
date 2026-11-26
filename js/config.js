@@ -2,16 +2,16 @@
 //  ASTRO 웹사이트 설정 파일 — 이 파일만 고치면 됩니다.
 // =====================================================================
 
-// 1) Firebase 웹 앱 설정 (기존 ASTRO 사이트와 같은 프로젝트)
+// 1) Firebase 웹 앱 설정 (프로젝트: astro-web-1e6f4)
 //    apiKey 를 비우면 '데모 모드'(이 브라우저에만 저장되는 체험용)로 실행됩니다.
 export const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCtV0rzA4ZbBt9xv8Yogw6Y9dgA2-hydU0",
-  authDomain: "astro-bugil-a1dd7.firebaseapp.com",
-  projectId: "astro-bugil-a1dd7",
-  storageBucket: "astro-bugil-a1dd7.firebasestorage.app",
-  messagingSenderId: "751134919017",
-  appId: "1:751134919017:web:814be1b6b5cefb09c595f8",
-  measurementId: "G-21GJSVVG2G"
+  apiKey: "AIzaSyCfS8K14FCFU4Du43LZqGVhlVo0ayS6Mpc",
+  authDomain: "astro-web-1e6f4.firebaseapp.com",
+  projectId: "astro-web-1e6f4",
+  storageBucket: "astro-web-1e6f4.firebasestorage.app",
+  messagingSenderId: "111721529007",
+  appId: "1:111721529007:web:4d44d2a69562d7e2b71e5a",
+  measurementId: "G-DEJ7NH1SQD"
 };
 
 // Firebase JS SDK 버전 (gstatic CDN에서 불러옵니다)
@@ -21,18 +21,19 @@ export const FIREBASE_SDK_VERSION = "13.4.0";
 //    Supabase 대시보드 › Project Settings › API 에서 Project URL 과 anon(public) 키를 넣으세요.
 //    ⚠️ service_role 키는 절대 넣지 마세요. (anon / publishable 키만)
 export const SUPABASE = {
-  url: "",                // 예: "https://abcdefghijklmn.supabase.co"
-  anonKey: "",            // 예: "eyJhbGciOi..." 또는 "sb_publishable_..."
+  url: "https://njjqrfzuyrxgzxfahmdi.supabase.co",
+  anonKey: "sb_publishable_D8Se8ir3OTplFToq3x4Y6w_VjMFKvl-",
+  // 예전 형식 anon 키 (publishable 키가 안 될 때 위 anonKey 와 바꿔 쓰세요):
+  // eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5qanFyZnp1eXJ4Z3p4ZmFobWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU2NzY1NzEsImV4cCI6MjExMTI1MjU3MX0.SPBx1Ncw7R5K5tPRPyadILvZsVKizRLZnUyJeX7KLe8
   bucket: "astro-photos", // supabase-setup.sql 이 만드는 버킷 이름
   sdk: "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/+esm"
 };
 
-// 2) 운영담당자(OWNER) — 모든 권한. 관리자 임명, 합격/불합격 결정, 지원 질문·상단 알림 배너 설정
-//    관리자(ADMIN)는 운영담당자가 관리자 페이지에서 이메일로 추가합니다 (Firestore 'admins' 컬렉션).
-export const OWNER_EMAILS = [
-  "yunthomas0120@gmail.com",
-  "yunarchive0120@gmail.com"
-];
+// 2) 운영담당자(OWNER) 지정 콘솔 비밀번호
+//    홈 화면(첫 화면)에서 입력창이 아닌 곳에 키보드로 이 숫자를 치면 '운영담당자 지정 콘솔'이 열립니다.
+//    휴대폰: 홈 화면 왼쪽 아래 로고를 5번 연속으로 누르면 비밀번호 입력창이 뜹니다.
+//    운영담당자 목록은 Firestore config/owners 에 저장됩니다. (firestore.rules 의 비밀번호도 같게 유지)
+export const OWNER_CONSOLE_KEY = "100120";
 
 // 3) 특정 도메인 계정만 로그인 허용하려면 입력 (예: "bugil.hs.kr"). 비워두면 모두 허용
 export const ALLOWED_EMAIL_DOMAIN = "";

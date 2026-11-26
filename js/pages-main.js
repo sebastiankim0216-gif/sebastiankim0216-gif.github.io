@@ -1,11 +1,11 @@
 // 홈 · 소개 · 공지사항 · 커뮤니티 · 가입하기
-import { S, isAdmin, isOwner, isMine, canEdit, isDemo, slides, authorFields, normActivity, loadQuestions, applicationQA } from "./state.js?v=202611261551";
-import { COMMUNITY_CATEGORIES } from "./config.js?v=202611261551";
+import { S, isAdmin, isOwner, isMine, canEdit, isDemo, slides, authorFields, normActivity, loadQuestions, applicationQA } from "./state.js?v=202611261642";
+import { COMMUNITY_CATEGORIES } from "./config.js?v=202611261642";
 import {
   $, $$, esc, lines, richText, excerpt, parsePairs, safeLink, isExternal, icon, sparkle, compassStar, wordmark, orbitSVG,
   avatar, loading, empty, pageHero, secHead, toast, errMsg, modal, confirmDialog, setBtnBusy, fmtDate, fmtDateTime, relTime, isNew, ymd
-} from "./ui.js?v=202611261551";
-import { actCard, firstImage } from "./pages-activity.js?v=202611261551";
+} from "./ui.js?v=202611261642";
+import { actCard, firstImage } from "./pages-activity.js?v=202611261642";
 
 const ARROW = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>`;
 const PAGE_SIZE = 10;
@@ -433,7 +433,7 @@ export async function findMyApplication() {
 export async function renderJoin(app) {
   const s = S.site;
   app.innerHTML = `
-  ${pageHero({ en: "APPLY", ko: "가입 신청", desc: "ASTRO와 함께 항공우주공학의 꿈을 키워갈 새로운 부원을 모집합니다.", bg: "assets/hero-dusk.jpg" })}
+  ${pageHero({ en: "APPLY", ko: "가입 신청", desc: "ASTRO와 함께 항공우주공학의 꿈을 키워갈 새로운 부원을 모집합니다.", bg: "assets/campus-front.jpg" })}
   <section class="page"><div class="wrap join-layout">
     <aside class="panel hudc">
       <p class="eyebrow">JOIN US</p>

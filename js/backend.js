@@ -10,7 +10,7 @@
 //  api.upload(file, folder, onProgress) → { url, path, type, name, size }
 //  api.deleteFile(path)
 
-import { FIREBASE_CONFIG, FIREBASE_SDK_VERSION, OWNER_EMAILS, ALLOWED_EMAIL_DOMAIN, SUPABASE, UPLOAD_LIMITS } from "./config.js?v=202611261551";
+import { FIREBASE_CONFIG, FIREBASE_SDK_VERSION, ALLOWED_EMAIL_DOMAIN, SUPABASE, UPLOAD_LIMITS, OWNER_CONSOLE_KEY } from "./config.js?v=202611261642";
 
 export function isConfigured() {
   return !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId);
@@ -18,11 +18,10 @@ export function isConfigured() {
 
 export async function createBackend() {
   if (isConfigured()) return createFirebase();
-  const { createDemo } = await import("./demo-backend.js?v=202611261551");
+  const { createDemo } = await import("./demo-backend.js?v=202611261642");
   return createDemo();
 }
 
-export const isOwnerEmail = (e) => OWNER_EMAILS.map((s) => s.trim().toLowerCase()).includes(String(e || "").toLowerCase());
 const extOf = (f) => (String(f.name || "").match(/\.(jpe?g|png|webp|gif)$/i)?.[1] || (f.type || "image/jpeg").split("/")[1] || "jpg").toLowerCase().replace("jpeg", "jpg");
 
 // Firestore Timestamp → 밀리초 숫자
@@ -90,7 +89,7 @@ async function createFirebase() {
   const ref = (path, id) => fs.doc(db, ...path.split("/"), id);
   const toObj = (s) => ({ id: s.id, ...norm(s.data()) });
 
-  // 역할: owner(OWNER_EMAILS) > admin('admins' 컬렉션, 문서 ID = 이메일) > user
+  // 역할: owner(config/owners.emails) > admin('admins' 컬렉션, 문서 ID = 이메일) > user
   async function syncUser(u) {
     if (!u) return null;
     const email = String(u.email || "").toLowerCase();
@@ -102,8 +101,12 @@ async function createFirebase() {
     }
     let role = "user";
     if (!u.emailVerified) role = "user"; // 인증되지 않은 이메일은 관리자 권한을 받을 수 없음
-    else if (isOwnerEmail(email)) role = "owner";
     else {
+      let owners = [];
+      try { const o = await fs.getDoc(ref("config", "owners")); owners = (o.exists() && o.data().emails) || []; } catch (e) { console.warn("owners", e); }
+      if (owners.map((x) => String(x).toLowerCase()).includes(email)) role = "owner";
+    }
+    if (role === "user" && u.emailVerified) {
       try { const a = await fs.getDoc(ref("admins", email)); if (a.exists()) role = "admin"; } catch (e) { console.warn("admin check", e); }
     }
     let theme = "";
@@ -199,19 +202,14 @@ async function createFirebase() {
         }
       } catch (e) { console.warn("deleteFile", e); }
     },
-    // 업로드 권한(관리자 목록)을 Supabase 에도 맞춰 둠 — 운영담당자만 가능
+    // 사진 업로드 권한(운영담당자 + 관리자 이메일)을 Supabase 에 맞춰 둠
     async syncUploaders(emails) {
       if (!SUPABASE.url || !SUPABASE.anonKey) return { ok: false, reason: "Supabase 미설정" };
       const sb = await supabase();
-      const want = new Set(emails.map((e) => String(e).toLowerCase()));
-      const { data, error } = await sb.from("astro_admins").select("email");
+      const list = [...new Set(emails.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
+      const { data, error } = await sb.rpc("astro_set_uploaders", { p_key: OWNER_CONSOLE_KEY, p_emails: list });
       if (error) throw sbError(error);
-      const have = new Set((data || []).map((r) => r.email));
-      const add = [...want].filter((e) => !have.has(e)).map((email) => ({ email }));
-      const del = [...have].filter((e) => !want.has(e));
-      if (add.length) { const r = await sb.from("astro_admins").upsert(add); if (r.error) throw sbError(r.error); }
-      if (del.length) { const r = await sb.from("astro_admins").delete().in("email", del); if (r.error) throw sbError(r.error); }
-      return { ok: true, added: add.length, removed: del.length };
+      return { ok: true, count: data ?? list.length };
     }
   };
 }

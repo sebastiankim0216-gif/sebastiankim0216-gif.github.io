@@ -89,12 +89,14 @@ export function icon(name, cls = "") {
   if (name === "play") return `<svg class="ico fill ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P.play}</svg>`;
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[name] || ""}</svg>`;
 }
-export const SPARKLE_PATH = "M0,-24 C1.6,-7 7,-1.6 24,0 C7,1.6 1.6,7 0,24 C-1.6,7 -7,1.6 -24,0 C-7,-1.6 -1.6,-7 0,-24Z";
+// 아이콘용 별: 꼭짓점 5개 (4각 반짝이 모양은 Gemini 로고와 헷갈릴 수 있어 쓰지 않음)
+export const STAR_PATH = "M0.00,-21.50L5.76,-6.43L21.87,-5.61L9.32,4.53L13.52,20.11L0.00,11.30L-13.52,20.11L-9.32,4.53L-21.87,-5.61L-5.76,-6.43Z";
 export function sparkle(cls = "") {
-  return `<svg class="${cls}" viewBox="-25 -25 50 50" aria-hidden="true"><path d="${SPARKLE_PATH}"/><path d="M0,-9 C.6,-2.6 2.6,-.6 9,0 C2.6,.6 .6,2.6 0,9 C-.6,2.6 -2.6,.6 -9,0 C-2.6,-.6 -.6,-2.6 0,-9Z" transform="rotate(45)" opacity=".85"/></svg>`;
+  return `<svg class="${cls}" viewBox="-25 -25 50 50" aria-hidden="true"><path d="${STAR_PATH}" stroke-linejoin="round"/></svg>`;
 }
-export function compassStar(cls = "") {
-  return `<svg class="${cls}" viewBox="-25 -25 50 50" aria-hidden="true"><circle r="11" fill="none" stroke="#fff" stroke-width=".9" opacity=".8"/><path d="${SPARKLE_PATH}"/><path d="M0,-13 C.8,-3.5 3.5,-.8 13,0 C3.5,.8 .8,3.5 0,13 C-.8,3.5 -3.5,.8 -13,0 C-3.5,-.8 -.8,-3.5 0,-13Z" transform="rotate(45)" opacity=".7"/></svg>`;
+// 히어로 왼쪽 아래 장식: 동아리 로고
+export function compassStar() {
+  return `<img src="assets/logo-white.png" alt="" class="corner-logo">`;
 }
 
 // ASTRO 워드마크 (시안의 Λ 형태 A)
@@ -132,10 +134,10 @@ export function orbitSVG() {
     <ellipse cx="348.5" cy="157.5" rx="350" ry="108" transform="rotate(-17.9 348.5 157.5)" fill="none" stroke="url(#og1)" stroke-width="1.7"/>
     <path d="M150 412 Q 520 250 880 82" fill="none" stroke="url(#og2)" stroke-width="1.3"/>
     <g class="glint">
-      <circle cx="653" cy="111" r="44" fill="url(#og3)"/>
-      <path d="M480 111H826" stroke="url(#og4)" stroke-width="1.4"/>
-      <path d="M653,58 C654.2,101 656,108.6 748,111 C656,113.4 654.2,121 653,164 C651.8,121 650,113.4 558,111 C650,108.6 651.8,101 653,58Z" fill="#fff"/>
-      <circle cx="653" cy="111" r="5" fill="#fff"/>
+      <circle cx="653" cy="111" r="40" fill="url(#og3)"/>
+      <path d="M520 111H786" stroke="url(#og4)" stroke-width="1.2"/>
+      <circle cx="653" cy="111" r="9" fill="#fff" opacity=".55"/>
+      <circle cx="653" cy="111" r="5.5" fill="#fff"/>
     </g>
   </svg>`;
 }
@@ -158,7 +160,7 @@ export function pageHero({ en, ko, desc = "", bg = "assets/hero-day.jpg" }) {
     <svg class="hud" data-hud="page" aria-hidden="true"></svg>
     <div class="ph-inner wrap">
       <p class="ph-kicker">Bugil Academy ASTRO</p>
-      <h1 class="ph-title">${esc(en)}${sparkle("ph-glint")}</h1>
+      <h1 class="ph-title">${esc(en)}<span class="ph-orb" aria-hidden="true"></span></h1>
       <p class="ph-ko"><b>${esc(ko)}</b>${esc(desc)}</p>
     </div>
   </section>`;

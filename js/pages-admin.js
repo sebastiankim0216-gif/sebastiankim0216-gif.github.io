@@ -1,13 +1,13 @@
 // 관리자 페이지 — 옛 ASTRO 운영자 콘솔과 같은 권한 구조
 //   운영담당자(owner): 전부 + 관리자 임명, 합격/불합격, 지원 질문, 상단 알림 배너
 //   관리자(admin): 신청서 열람·삭제, 공지, 메인 배너, 사이트 설정
-import { S, isAdmin, isOwner, imageMaxSide, loadBanners, saveBanners, loadSite, loadQuestions, applicationQA } from "./state.js?v=202611261551";
-import { DEFAULT_BANNERS, UPLOAD_LIMITS, OWNER_EMAILS, SUPABASE } from "./config.js?v=202611261551";
+import { S, isAdmin, isOwner, imageMaxSide, loadBanners, saveBanners, loadSite, loadQuestions, applicationQA, loadOwners } from "./state.js?v=202611261642";
+import { DEFAULT_BANNERS, UPLOAD_LIMITS, SUPABASE } from "./config.js?v=202611261642";
 import {
   $, $$, esc, icon, avatar, loading, empty, pageHero, toast, errMsg, modal, confirmDialog,
   setBtnBusy, fmtDate, fmtDateTime, relTime, mediaField, prepareImage, safeLink
-} from "./ui.js?v=202611261551";
-import { noticeForm, APP_STATUS, applicationAnswersHTML } from "./pages-main.js?v=202611261551";
+} from "./ui.js?v=202611261642";
+import { noticeForm, APP_STATUS, applicationAnswersHTML } from "./pages-main.js?v=202611261642";
 
 const TABS = [
   ["", "대시보드", "grid", false],
@@ -23,7 +23,7 @@ const TABS = [
 export async function renderAdmin(app, tab = "") {
   const visible = TABS.filter(([, , , ownerOnly]) => !ownerOnly || isOwner());
   if (!visible.some(([k]) => k === tab)) tab = "";
-  app.innerHTML = `${pageHero({ en: "ADMIN", ko: isOwner() ? "운영자 콘솔" : "관리자", desc: "가입 신청 · 공지 · 배너 · 사이트를 관리해요.", bg: "assets/hero-night.jpg" })}
+  app.innerHTML = `${pageHero({ en: "ADMIN", ko: isOwner() ? "운영자 콘솔" : "관리자", desc: "가입 신청 · 공지 · 배너 · 사이트를 관리해요.", bg: "assets/campus-night.jpg" })}
     <section class="page"><div class="wrap" id="adminWrap"></div></section>`;
   const w = $("#adminWrap");
   if (!S.user || !isAdmin()) {
@@ -244,7 +244,7 @@ async function questions(body) {
     $("#qAdd").addEventListener("click", () => { list.push({ id: newId(), title: "", min: 0, max: 0, required: true }); draw(); body.querySelector(".q-row:last-child textarea")?.focus(); });
     $("#qReset").addEventListener("click", async () => {
       if (!(await confirmDialog("옛 사이트와 같은 기본 5문항으로 되돌릴까요?\n(저장해야 반영돼요)", { okText: "되돌리기" }))) return;
-      const { DEFAULT_QUESTIONS } = await import("./config.js?v=202611261551");
+      const { DEFAULT_QUESTIONS } = await import("./config.js?v=202611261642");
       list = DEFAULT_QUESTIONS.map((q) => ({ ...q })); draw();
     });
     $("#qSave").addEventListener("click", async (e) => {
@@ -269,24 +269,25 @@ async function admins(body) {
   const sync = async (list, quiet = true) => {
     if (!SUPABASE.url || !SUPABASE.anonKey) return;
     try {
-      const r = await S.api.syncUploaders([...OWNER_EMAILS, ...list.map((a) => a.id)]);
-      if (!quiet || r.added || r.removed) toast(`사진 업로드 권한을 맞췄어요. (추가 ${r.added}, 해제 ${r.removed})`, "ok");
+      const r = await S.api.syncUploaders([...S.owners, ...list.map((a) => a.id)]);
+      if (!quiet) toast(`사진 업로드 권한을 맞췄어요. (${r.count}명)`, "ok");
       const el = $("#sbSync"); if (el) el.innerHTML = `${icon("check")} 사진 저장소(Supabase) 업로드 권한 동기화됨`;
     } catch (e) {
       const el = $("#sbSync"); if (el) el.innerHTML = `${icon("x")} Supabase 동기화 실패: ${esc(errMsg(e))}`;
     }
   };
   const draw = async () => {
-    const list = await S.api.list("admins").catch(() => []);
+    const [list] = await Promise.all([S.api.list("admins").catch(() => []), loadOwners()]);
     if (!body.isConnected) return;
     body.innerHTML = `<div class="grid-2">
       <div class="panel hudc">
         <div class="panel-head"><h3>ADMINS <small>현재 관리자</small></h3></div>
         <ul class="my-list">
-          ${OWNER_EMAILS.map((e) => `<li><a><span class="role admin">운영담당자</span><span class="t">${esc(e)}</span><span class="d"></span></a></li>`).join("")}
+          ${S.owners.map((e) => `<li><a><span class="role admin">운영담당자</span><span class="t">${esc(e)}</span><span class="d"></span></a></li>`).join("")}
           ${list.map((a) => `<li><a><span class="role">관리자</span><span class="t">${esc(a.id)}</span><button class="btn sm danger" data-rm="${esc(a.id)}">해제</button></a></li>`).join("")}
         </ul>
         ${!list.length ? `<p class="text-dim mt-s" style="font-size:14px">임명된 관리자가 없어요.</p>` : ""}
+        <p class="hint mt-s">운영담당자는 홈 화면 비밀번호 콘솔에서 임명·해제해요.</p>
         <p class="text-dim mt-m" id="sbSync" style="font-size:13px;display:flex;gap:6px;align-items:center">${SUPABASE.url ? "사진 저장소 권한 확인 중…" : "사진 저장소(Supabase)가 아직 설정되지 않았어요."}</p>
       </div>
       <div class="panel hudc">
@@ -298,7 +299,7 @@ async function admins(body) {
       e.preventDefault();
       const email = $("#adE").value.trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast("올바른 이메일을 입력해 주세요.", "err");
-      if (OWNER_EMAILS.map((x) => x.toLowerCase()).includes(email)) return toast("운영담당자 이메일은 추가할 수 없어요.", "err");
+      if (S.owners.includes(email)) return toast("이미 운영담당자인 이메일이에요.", "err");
       try { await S.api.set("admins", email, { addedBy: S.user.email, addedAt: S.api.now() }, false); toast(`${email} 을(를) 관리자로 추가했어요.`, "ok"); draw(); }
       catch (err) { toast(errMsg(err), "err"); }
     });

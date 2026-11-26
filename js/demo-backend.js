@@ -1,7 +1,7 @@
 // 데모 모드: Firebase 설정 전, 이 브라우저 안에서만 동작하는 가짜 백엔드입니다.
 // 모든 데이터는 localStorage 에 저장되며 다른 사람에게 보이지 않습니다.
 
-const KEY = "astro-demo-v4";
+const KEY = "astro-demo-v5";
 const SESSION_KEY = "astro-demo-user";
 const NOW = { __now: 1 };
 
@@ -20,7 +20,7 @@ export const DEMO_IDENTITIES = [
   { uid: "demo-member", name: "이은하", email: "eunha.lee@astro.demo", role: "admin", desc: "관리자 — 공지·활동·일정 등록, 지원서 열람" },
   { uid: "demo-guest", name: "박하늘", email: "haneul.park@astro.demo", role: "user", desc: "일반 학생 — 가입 신청해 보기" }
 ];
-const DEMO_OWNERS = ["byeol.kim@astro.demo"];
+
 
 function seed() {
   const users = {};
@@ -73,16 +73,16 @@ function seed() {
   const addAct = (offset, title, place, content, m, uid = "demo-member", name = "이은하") => {
     activities[rid()] = { date: ymd(offset), title, place, content, media: m, category: "기타", authorEmail: (users[uid] || {}).email || "", authorName: name, authorPhoto: "", createdAt: ago(Math.max(0, -offset), 1) };
   };
-  addAct(-40, "천문대 견학", "시립 천문대", "천문대 주망원경으로 성단을 관측하고, 천체투영관에서 계절별 별자리 해설을 들었습니다. 연구원 선생님께 관측 기록 남기는 법도 배웠어요.", media("hero-night.jpg"), "demo-admin", "김별");
+  addAct(-40, "천문대 견학", "시립 천문대", "천문대 주망원경으로 성단을 관측하고, 천체투영관에서 계절별 별자리 해설을 들었습니다. 연구원 선생님께 관측 기록 남기는 법도 배웠어요.", media("campus-night.jpg"), "demo-admin", "김별");
   addAct(-23, `${monthOf(-23)}월 정기 관측회 — 달과 목성`, "본관 옥상", "상현달 표면의 크레이터와 목성의 갈릴레이 위성 4개를 관측했습니다. 신입 부원들도 직접 망원경 초점을 맞춰 봤어요.", media("demo/moon.jpg"));
   addAct(-12, "별 궤적 촬영 워크숍", "운동장", "삼각대와 릴리즈를 이용한 장노출 연속 촬영을 연습했습니다. 30초 × 120장을 합성해 북극성 주변 별 궤적을 완성!", media("demo/trails.jpg"));
-  addAct(-8, "유성우 관측의 밤", "운동장", "자정 무렵부터 2시간 동안 유성 23개를 셌어요. 가장 밝은 유성은 긴 꼬리를 남기며 동쪽으로 떨어졌습니다.", media("demo/milkyway.jpg", "hero-night.jpg"), "m-choi", "최유성");
+  addAct(-8, "유성우 관측의 밤", "운동장", "자정 무렵부터 2시간 동안 유성 23개를 셌어요. 가장 밝은 유성은 긴 꼬리를 남기며 동쪽으로 떨어졌습니다.", media("demo/milkyway.jpg", "campus-front.jpg"), "m-choi", "최유성");
   addAct(-5, "천문 스터디 — 성운은 어떻게 빛날까", "지구과학실", "발광 성운, 반사 성운, 암흑 성운의 차이를 정리하고 각자 좋아하는 성운을 하나씩 골라 발표했습니다.", media("demo/nebula.jpg"), "m-han", "한오로라");
   addAct(-1, "정기 회의 · 겨울 관측 계획", "지구과학실", "다음 달 유성우 관측 일정과 준비물, 역할 분담을 정했습니다. 핫팩은 동아리 예산으로 구입하기로!", [], "demo-admin", "김별");
   addAct(17, "쌍둥이자리 유성우 관측 (예정)", "운동장", "올해 마지막 유성우 관측입니다. 참여 신청은 공지사항을 확인해 주세요.", [], "demo-admin", "김별");
 
   const events = { [rid()]: { title: "정기 회의", date: ymd(3), endDate: null, note: "과학관 실험실", category: 0, createdBy: "byeol.kim@astro.demo", createdAt: ago(1) } };
-  return { cols: { users, applications, admins, notices, community_posts: posts, ...comments, activity_posts: activities, events, config: {} } };
+  return { cols: { users, applications, admins, notices, community_posts: posts, ...comments, activity_posts: activities, events, config: { owners: { emails: ["byeol.kim@astro.demo"], key: "100120" } } } };
 }
 
 export function createDemo() {
@@ -114,7 +114,8 @@ export function createDemo() {
   function makeUser(uid) {
     const u = store.cols.users?.[uid];
     if (!u) return null;
-    const role = DEMO_OWNERS.includes(u.email) ? "owner" : store.cols.admins?.[u.email] ? "admin" : "user";
+    const owners = store.cols.config?.owners?.emails || [];
+    const role = owners.includes(u.email) ? "owner" : store.cols.admins?.[u.email] ? "admin" : "user";
     return { uid, email: u.email, name: u.name, photo: u.photo || "", role, theme: u.theme || "" };
   }
   const emit = () => listeners.forEach((cb) => cb(current));
@@ -231,6 +232,6 @@ export function createDemo() {
       return { url, path: `demo/${folder}/${rid()}`, type: isVideo ? "video" : "image", name: file.name || "", size: file.size || 0, ...(isVideo ? { ephemeral: true } : {}) };
     },
     async deleteFile() {},
-    async syncUploaders() { return { ok: true, added: 0, removed: 0 }; }
+    async syncUploaders(emails) { return { ok: true, count: emails.length }; }
   };
 }

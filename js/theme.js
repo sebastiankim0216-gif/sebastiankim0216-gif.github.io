@@ -1,5 +1,5 @@
 // 화면 테마: <html data-astro-theme="white|black|navy">
-import { THEMES, DEFAULT_THEME } from "./config.js?v=202611261551";
+import { THEMES, DEFAULT_THEME } from "./config.js?v=202611261642";
 
 const KEY = "astro-theme";
 

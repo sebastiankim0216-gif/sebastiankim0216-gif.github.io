@@ -1,10 +1,10 @@
 // 활동(달력 + 기록) · 활동 상세 · 갤러리
-import { S, isAdmin, canEdit, isDemo, imageMaxSide, authorFields, normActivity } from "./state.js?v=202611261551";
-import { UPLOAD_LIMITS, ACTIVITY_CATEGORIES, EVENT_CATEGORIES } from "./config.js?v=202611261551";
+import { S, isAdmin, canEdit, isDemo, imageMaxSide, authorFields, normActivity } from "./state.js?v=202611261642";
+import { UPLOAD_LIMITS, ACTIVITY_CATEGORIES, EVENT_CATEGORIES } from "./config.js?v=202611261642";
 import {
   $, $$, esc, richText, excerpt, icon, sparkle, avatar, loading, empty, pageHero, secHead, toast, errMsg, modal,
   confirmDialog, setBtnBusy, fmtDateTime, fmtYmd, ymd, parseYmd, DOW, mediaField, prepareImage, youtubeId, lightbox
-} from "./ui.js?v=202611261551";
+} from "./ui.js?v=202611261642";
 
 export const firstImage = (a) => (a.media || []).find((m) => m.type === "image")?.url || "";
 const mediaCount = (a) => (a.media || []).length;
@@ -39,7 +39,7 @@ export async function renderActivity(app, id) {
   const cache = new Map();
 
   app.innerHTML = `
-  ${pageHero({ en: "ACTIVITY", ko: "활동 기록", desc: "달력에서 날짜를 골라 그날의 활동을 확인하세요.", bg: "assets/hero-night.jpg" })}
+  ${pageHero({ en: "ACTIVITY", ko: "활동 기록", desc: "달력에서 날짜를 골라 그날의 활동을 확인하세요.", bg: "assets/campus-night.jpg" })}
   <section class="page"><div class="wrap">
     ${secHead("CALENDAR", "활동 · 일정 달력", isAdmin() ? `<button class="btn" id="eWrite">${icon("calendar")} 일정 추가</button><button class="btn primary" id="aWrite">${icon("plus")} 활동 기록하기</button>` : "", "날짜를 누르면 그날의 일정과 활동 기록을 볼 수 있어요.")}
     <div class="act-layout">
@@ -194,7 +194,7 @@ function eventForm(date) {
 // ACTIVITY DETAIL
 // =====================================================================
 async function activityDetail(app, id) {
-  app.innerHTML = `${pageHero({ en: "ACTIVITY", ko: "활동 기록", desc: "달력에서 날짜를 골라 그날의 활동을 확인하세요.", bg: "assets/hero-night.jpg" })}
+  app.innerHTML = `${pageHero({ en: "ACTIVITY", ko: "활동 기록", desc: "달력에서 날짜를 골라 그날의 활동을 확인하세요.", bg: "assets/campus-night.jpg" })}
     <section class="page"><div class="wrap"><div class="panel hudc" id="aDetail">${loading()}</div></div></section>`;
   const raw = await S.api.get("activity_posts", id);
   const a = raw ? normActivity(raw) : null;
@@ -321,7 +321,7 @@ export function activityForm(a = null, date = null) {
 // =====================================================================
 export async function renderGallery(app) {
   app.innerHTML = `
-  ${pageHero({ en: "GALLERY", ko: "갤러리", desc: "활동 기록에 올라온 사진과 영상이 모두 모여요.", bg: "assets/hero-dusk.jpg" })}
+  ${pageHero({ en: "GALLERY", ko: "갤러리", desc: "활동 기록에 올라온 사진이 모두 모여요.", bg: "assets/campus-front.jpg" })}
   <section class="page"><div class="wrap">
     ${secHead("OUR MOMENTS", "우리의 순간", `<div class="tabs" id="gTabs"><button class="tab active" data-f="all">전체</button><button class="tab" data-f="image">사진</button><button class="tab" data-f="video">영상</button></div>`)}
     <div id="gWrap">${loading()}</div>

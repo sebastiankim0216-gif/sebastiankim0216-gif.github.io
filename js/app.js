@@ -1,12 +1,13 @@
 // ASTRO 웹사이트 — 진입점: 부팅, 라우터, 헤더, 로그인, 상단 알림 배너
-import { S, isAdmin, isOwner, loadSite, loadBanners, loadQuestions, isDemo } from "./state.js?v=202611261551";
-import { $, $$, esc, icon, avatar, roleChip, toast, errMsg, modal, attachHud, inAppBrowser, confirmDialog, setBtnBusy } from "./ui.js?v=202611261551";
-import { createBackend } from "./backend.js?v=202611261551";
-import { renderHome, renderAbout, renderNotice, renderCommunity, renderJoin } from "./pages-main.js?v=202611261551";
-import { renderActivity, renderGallery } from "./pages-activity.js?v=202611261551";
-import { renderAdmin } from "./pages-admin.js?v=202611261551";
-import { renderMypage } from "./pages-mypage.js?v=202611261551";
-import { applyTheme, currentTheme } from "./theme.js?v=202611261551";
+import { S, isAdmin, isOwner, loadSite, loadBanners, loadQuestions, isDemo, loadOwners, saveOwners } from "./state.js?v=202611261642";
+import { OWNER_CONSOLE_KEY } from "./config.js?v=202611261642";
+import { $, $$, esc, icon, avatar, roleChip, toast, errMsg, modal, attachHud, inAppBrowser, confirmDialog, setBtnBusy } from "./ui.js?v=202611261642";
+import { createBackend } from "./backend.js?v=202611261642";
+import { renderHome, renderAbout, renderNotice, renderCommunity, renderJoin } from "./pages-main.js?v=202611261642";
+import { renderActivity, renderGallery } from "./pages-activity.js?v=202611261642";
+import { renderAdmin } from "./pages-admin.js?v=202611261642";
+import { renderMypage } from "./pages-mypage.js?v=202611261642";
+import { applyTheme, currentTheme } from "./theme.js?v=202611261642";
 
 const ROUTES = {
   home: renderHome, about: renderAbout, activity: renderActivity, gallery: renderGallery,
@@ -167,6 +168,92 @@ function demoPicker() {
   });
 }
 
+// ---------- 운영담당자 지정 콘솔 (홈 화면에서 비밀번호 입력) ----------
+let keyBuf = "";
+document.addEventListener("keydown", (e) => {
+  if (parseHash().page !== "home" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target && e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
+  if (document.querySelector(".modal-backdrop, .lightbox")) return;
+  if (!/^[0-9]$/.test(e.key)) { if (e.key.length === 1) keyBuf = ""; return; }
+  keyBuf = (keyBuf + e.key).slice(-OWNER_CONSOLE_KEY.length);
+  if (keyBuf === OWNER_CONSOLE_KEY) { keyBuf = ""; ownerConsole(); }
+});
+// 휴대폰: 홈 화면에서 로고를 5번 연속으로 누르면 비밀번호 입력창
+let taps = [];
+document.addEventListener("click", (e) => {
+  if (parseHash().page !== "home" || !e.target.closest(".site-header .logo, .corner-star")) return;
+  const now = Date.now();
+  taps = [...taps.filter((t) => now - t < 2500), now];
+  if (taps.length >= 5) { taps = []; ownerKeyPrompt(); }
+});
+function ownerKeyPrompt() {
+  modal({
+    title: "비밀번호",
+    body: `<form id="okF" class="form"><div class="field"><label for="okIn">콘솔 비밀번호</label><input type="password" id="okIn" inputmode="numeric" autocomplete="off"></div></form>`,
+    foot: `<button class="btn" data-close>취소</button><button class="btn primary" id="okGo">확인</button>`,
+    onMount(el, ctl) {
+      const go = () => { if ($("#okIn", el).value === OWNER_CONSOLE_KEY) { ctl.close(); ownerConsole(); } else toast("비밀번호가 맞지 않아요.", "err"); };
+      el.parentElement.querySelector("#okGo").addEventListener("click", go);
+      $("#okF", el).addEventListener("submit", (e) => { e.preventDefault(); go(); });
+    }
+  });
+}
+async function ownerConsole() {
+  try { await loadOwners(); } catch { /* 빈 목록 */ }
+  modal({
+    title: "운영담당자 지정 콘솔",
+    body: `<p class="msg">운영담당자는 사이트의 모든 관리 권한을 가져요. (관리자 임명, 합격/불합격, 지원 문항, 상단 알림 등)<br>구글 계정이나 <b>인증된</b> 이메일 계정으로 로그인했을 때 적용돼요.</p>
+      <ul class="my-list mt-m" id="ocList"></ul>
+      <form id="ocForm" class="cmt-form mt-m" novalidate><label class="sr" for="ocEmail">임명할 이메일</label><input type="email" id="ocEmail" placeholder="임명할 이메일 (예: name@gmail.com)"><button class="btn primary" type="submit">${icon("plus")} 임명</button></form>`,
+    foot: `<button class="btn primary" data-close>닫기</button>`,
+    onMount(el) {
+      const valid = (m) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m);
+      const save = async (list, msg) => {
+        try {
+          await saveOwners(list);
+          toast(msg, "ok");
+          draw();
+          if (S.user) await S.api.reloadMe();
+        } catch (err) { toast(errMsg(err), "err"); }
+      };
+      const draw = (editIdx = -1) => {
+        const ul = $("#ocList", el);
+        ul.innerHTML = S.owners.length ? S.owners.map((m, i) => i === editIdx
+          ? `<li><a style="grid-template-columns:minmax(0,1fr) auto"><input type="email" id="ocEdit" value="${esc(m)}"><span style="display:flex;gap:6px"><button class="btn sm primary" data-save="${i}">저장</button><button class="btn sm" data-cancel>취소</button></span></a></li>`
+          : `<li><a><span class="role admin">운영담당자</span><span class="t">${esc(m)}</span><span style="display:flex;gap:6px"><button class="btn sm" data-edit="${i}">${icon("edit")} 수정</button><button class="btn sm danger" data-del="${i}">해제</button></span></a></li>`).join("")
+          : `<li class="text-dim" style="padding:12px 2px">아직 운영담당자가 없어요. 아래에 이메일을 입력해 임명해 주세요.</li>`;
+        $("#ocEdit", el)?.focus();
+      };
+      $("#ocList", el).addEventListener("click", async (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        if (b.dataset.edit) return draw(+b.dataset.edit);
+        if (b.dataset.cancel != null) return draw();
+        if (b.dataset.save) {
+          const v = $("#ocEdit", el).value.trim().toLowerCase();
+          if (!valid(v)) return toast("올바른 이메일을 입력해 주세요.", "err");
+          const list = S.owners.slice(); list[+b.dataset.save] = v;
+          return save(list, "운영담당자 이메일을 수정했어요.");
+        }
+        if (b.dataset.del) {
+          const m = S.owners[+b.dataset.del];
+          if (!(await confirmDialog(`${m} 의 운영담당자 권한을 해제할까요?${S.owners.length === 1 ? "\n마지막 운영담당자예요. 해제하면 운영담당자가 없어져요." : ""}`, { danger: true, okText: "해제" }))) return;
+          return save(S.owners.filter((x) => x !== m), "운영담당자를 해제했어요.");
+        }
+      });
+      $("#ocForm", el).addEventListener("submit", (e) => {
+        e.preventDefault();
+        const v = $("#ocEmail", el).value.trim().toLowerCase();
+        if (!valid(v)) return toast("올바른 이메일을 입력해 주세요.", "err");
+        if (S.owners.includes(v)) return toast("이미 운영담당자예요.", "err");
+        $("#ocEmail", el).value = "";
+        save([...S.owners, v], `${v} 을(를) 운영담당자로 임명했어요.`);
+      });
+      draw();
+    }
+  });
+}
+
 // ---------- 상단 알림 배너 (config/site_banner) ----------
 const BAR_LS = "astro_banner";
 async function loadSiteBar() {
@@ -230,7 +317,7 @@ async function boot() {
     if (first) { first = false; firstResolve(); return; }
     if (prev !== (u ? `${u.uid}:${u.role}` : "")) route({ keepScroll: true });
   });
-  await Promise.all([loadSite(), loadBanners(), loadQuestions(), firstAuth]);
+  await Promise.all([loadSite(), loadBanners(), loadQuestions(), loadOwners(), firstAuth]);
   $("#footerText").textContent = S.site.footerText || "북일고등학교 항공우주·기계공학 동아리 ASTRO";
   if (isDemo()) demoPill();
   loadSiteBar();
