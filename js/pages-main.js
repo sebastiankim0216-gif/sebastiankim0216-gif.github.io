@@ -1,11 +1,11 @@
 // 홈 · 소개 · 공지사항 · 커뮤니티 · 가입하기
-import { S, isAdmin, isMember, canEdit, isDemo, slides, authorFields } from "./state.js";
-import { COMMUNITY_CATEGORIES, INTERESTS } from "./config.js";
+import { S, isAdmin, isOwner, isMine, canEdit, isDemo, slides, authorFields, normActivity, loadQuestions, applicationQA } from "./state.js?v=202611261551";
+import { COMMUNITY_CATEGORIES } from "./config.js?v=202611261551";
 import {
   $, $$, esc, lines, richText, excerpt, parsePairs, safeLink, isExternal, icon, sparkle, compassStar, wordmark, orbitSVG,
   avatar, loading, empty, pageHero, secHead, toast, errMsg, modal, confirmDialog, setBtnBusy, fmtDate, fmtDateTime, relTime, isNew, ymd
-} from "./ui.js";
-import { actCard, firstImage } from "./pages-activity.js";
+} from "./ui.js?v=202611261551";
+import { actCard, firstImage } from "./pages-activity.js?v=202611261551";
 
 const ARROW = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>`;
 const PAGE_SIZE = 10;
@@ -18,7 +18,7 @@ export async function renderHome(app) {
   const linkAttr = (h) => { const s = safeLink(h); return `href="${esc(s)}"${isExternal(s) ? ' target="_blank" rel="noopener"' : ""}`; };
   app.innerHTML = `
   <section class="hero" id="hero" aria-roledescription="carousel" aria-label="메인 배너">
-    <h1 class="sr">Bugil Academy ASTRO — 북일고등학교 천체관측 동아리</h1>
+    <h1 class="sr">Bugil Academy ASTRO — 북일고등학교 항공우주·기계공학 동아리</h1>
     <div class="hero-slides">${sl.map((b, i) => `<div class="slide${i === 0 ? " active" : ""}" style="background-image:url('${esc(b.imageUrl)}')"></div>`).join("")}</div>
     <div class="hero-shade"></div>
     <div class="hero-strip">
@@ -59,7 +59,7 @@ export async function renderHome(app) {
         ${secHead("GALLERY", "우리가 함께 본 하늘", `<a class="more" href="#gallery">전체 보기 ${icon("right")}</a>`)}
         <div class="gal-strip" id="hGal"></div>
       </div>
-      ${S.site.recruitOpen && !isMember() ? `<div class="sec">${recruitBand()}</div>` : ""}
+      ${S.site.recruitOpen && !isAdmin() ? `<div class="sec">${recruitBand()}</div>` : ""}
     </div>
   </section>`;
 
@@ -67,7 +67,7 @@ export async function renderHome(app) {
 
   const [notices, acts] = await Promise.all([
     S.api.list("notices", { orderBy: ["createdAt", "desc"], limit: 30 }).catch(() => []),
-    S.api.list("activities", { orderBy: ["date", "desc"], limit: 24 }).catch(() => [])
+    S.api.list("activity_posts", { orderBy: ["createdAt", "desc"], limit: 40 }).then((l) => l.map(normActivity).sort((a, b) => (a.date < b.date ? 1 : -1))).catch(() => [])
   ]);
   const nl = $("#hNotices");
   if (!nl) return;
@@ -130,7 +130,7 @@ export async function renderAbout(app) {
   const timeline = parsePairs(s.timeline);
   const contacts = [["지도교사", s.teacher], ["활동 장소", s.room], ["이메일", s.email], ["인스타그램", s.instagram]].filter(([, v]) => v);
   app.innerHTML = `
-  ${pageHero({ en: "ABOUT", ko: "동아리 소개", desc: "별을 사랑하는 북일고 학생들의 이야기", bg: "assets/hero-campus.jpg" })}
+  ${pageHero({ en: "ABOUT", ko: "동아리 소개", desc: "북일고등학교 항공우주·기계공학 동아리", bg: "assets/hero-campus.jpg" })}
   <section class="page">
     <div class="wrap">
       <div class="sec about-intro">
@@ -140,7 +140,7 @@ export async function renderAbout(app) {
       ${stats.length ? `<div class="sec stats">${stats.map(([k, v]) => `<div class="stat"><b>${esc(v || k)}</b><span>${esc(v ? k : "")}</span></div>`).join("")}</div>` : ""}
       ${programs.length ? `<div class="sec">${secHead("PROGRAM", "아스트로는 이런 활동을 해요")}
         <div class="grid-4">${programs.map(([t, d], i) => `<article class="prog">${sparkle("st")}<p class="idx">${String(i + 1).padStart(2, "0")}</p><h3>${esc(t)}</h3><p>${esc(d)}</p></article>`).join("")}</div></div>` : ""}
-      ${timeline.length ? `<div class="sec">${secHead("SCHEDULE", "한 해의 별자리", "", "해마다 이어지는 아스트로의 연간 일정이에요.")}
+      ${timeline.length ? `<div class="sec">${secHead("SCHEDULE", "연간 일정", "", "해마다 이어지는 아스트로의 연간 일정이에요.")}
         <div class="panel hudc"><ol class="timeline">${timeline.map(([m, t]) => `<li><b>${esc(m)}</b><span>${esc(t)}</span></li>`).join("")}</ol></div></div>` : ""}
       <div class="sec">
         ${s.recruitOpen ? recruitBand() : `<div class="panel guard"><h2>지금은 모집 기간이 아니에요</h2><p class="text-dim mt-s">모집 소식은 공지사항에서 가장 먼저 알려드려요.</p><div class="acts"><a class="btn" href="#notice">공지사항 보기</a></div></div>`}
@@ -242,7 +242,7 @@ export function noticeForm(n = null, after) {
           const data = { title, content, pinned: $("#nfP", el).checked };
           let id = n?.id;
           if (n) await S.api.update("notices", n.id, { ...data, updatedAt: S.api.now() });
-          else id = await S.api.add("notices", { ...data, authorUid: S.user.uid, authorName: S.user.realName || S.user.name });
+          else id = await S.api.add("notices", { ...data, authorEmail: S.user.email, authorName: S.user.name });
           ctl.setBusy(false); ctl.close();
           toast(n ? "수정했어요." : "공지를 등록했어요.", "ok");
           if (after) after(); else if (location.hash === `#notice-${id}`) S.rerender(); else location.hash = `#notice-${id}`;
@@ -255,36 +255,52 @@ export function noticeForm(n = null, after) {
 }
 
 // =====================================================================
-// COMMUNITY
+// COMMUNITY (Firestore: community_posts / comments)
 // =====================================================================
+export function guardLogin(what = "이 기능을 쓰려면") {
+  if (!S.user) { toast(`${what} 먼저 로그인해 주세요.`); S.login(); return false; }
+  return true;
+}
+export const guardMember = guardLogin;
+
 export async function renderCommunity(app, id) {
   if (id) return postDetail(app, id);
   app.innerHTML = `
-  ${pageHero({ en: "COMMUNITY", ko: "커뮤니티", desc: "관측 후기, 질문, 정보를 자유롭게 나눠요.", bg: "assets/hero-campus.jpg" })}
+  ${pageHero({ en: "COMMUNITY", ko: "커뮤니티", desc: "질문, 정보, 후기를 자유롭게 나눠요.", bg: "assets/hero-campus.jpg" })}
   <section class="page"><div class="wrap">
     ${secHead("BOARD", "이야기 나누기", `<label class="search">${icon("search")}<span class="sr">검색</span><input type="search" id="cq" placeholder="제목·내용·작성자 검색"></label><button class="btn primary" id="cWrite">${icon("edit")} 글쓰기</button>`)}
     <div class="tabs" id="cTabs" style="margin-bottom:18px">${["전체", ...COMMUNITY_CATEGORIES].map((c, i) => `<button class="tab${i === 0 ? " active" : ""}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
     <div class="post-list" id="cList">${loading()}</div>
     <div class="pager" id="cPager"></div>
   </div></section>`;
-  $("#cWrite").addEventListener("click", () => { if (guardMember("글을 쓰려면")) postForm(); });
+  $("#cWrite").addEventListener("click", () => { if (guardLogin("글을 쓰려면")) postForm(); });
   let all = [];
-  try { all = await S.api.list("posts", { orderBy: ["createdAt", "desc"], limit: 500 }); }
+  try { all = await S.api.list("community_posts", { orderBy: ["createdAt", "desc"], limit: 500 }); }
   catch (e) { $("#cList").innerHTML = empty("글을 불러오지 못했어요", errMsg(e)); return; }
+  all = [...all.filter((p) => p.isNotice), ...all.filter((p) => !p.isNotice)];
+  const counts = {};
   let cat = "전체", q = "", page = 1;
   const per = 12;
   const draw = () => {
     const list = $("#cList");
     if (!list) return;
-    const items = all.filter((p) => (cat === "전체" || p.category === cat) && (!q || `${p.title} ${p.content} ${p.authorName}`.toLowerCase().includes(q)));
+    const items = all.filter((p) => (cat === "전체" || (p.category || "자유") === cat || p.isNotice) && (!q || `${p.title} ${p.content} ${p.authorName} ${p.authorEmail}`.toLowerCase().includes(q)));
     const pages = Math.max(1, Math.ceil(items.length / per));
     page = Math.min(page, pages);
-    list.innerHTML = items.slice((page - 1) * per, page * per).map((p) => `
+    const slice = items.slice((page - 1) * per, page * per);
+    list.innerHTML = slice.map((p) => `
       <a class="post-item" href="#community-${esc(p.id)}">
-        <div><span class="chip">${esc(p.category || "자유")}</span>${isNew(p.createdAt) ? ' <span class="chip new">NEW</span>' : ""}<h3>${esc(p.title)}</h3><p>${esc(excerpt(p.content, 90))}</p></div>
-        <div class="side"><span class="who" style="display:inline-flex;gap:8px;align-items:center">${avatar(p.authorPhoto, p.authorName, "sm")}${esc(p.authorName)}</span><span>${relTime(p.createdAt)} · <span class="cmt">${icon("comment")}${p.commentCount || 0}</span></span></div>
+        <div>${p.isNotice ? `<span class="chip pin">${icon("pin")}공지</span>` : `<span class="chip">${esc(p.category || "자유")}</span>`}${isNew(p.createdAt) ? ' <span class="chip new">NEW</span>' : ""}<h3>${esc(p.title)}</h3><p>${esc(excerpt(p.content, 90))}</p></div>
+        <div class="side"><span class="who" style="display:inline-flex;gap:8px;align-items:center">${avatar(p.authorPhoto, p.authorName || p.authorEmail, "sm")}${esc(p.authorName || (p.authorEmail || "").split("@")[0] || "익명")}</span><span>${relTime(p.createdAt)} · 조회 ${p.views || 0} · <span class="cmt">${icon("comment")}<span data-cc="${esc(p.id)}">${counts[p.id] ?? "·"}</span></span></span></div>
       </a>`).join("") || empty(q || cat !== "전체" ? "조건에 맞는 글이 없어요" : "첫 글을 남겨 보세요!");
     $("#cPager").innerHTML = pages > 1 ? Array.from({ length: pages }, (_, k) => `<button class="${k + 1 === page ? "active" : ""}" data-p="${k + 1}">${k + 1}</button>`).join("") : "";
+    slice.filter((p) => counts[p.id] == null).forEach((p) => {
+      S.api.list(`community_posts/${p.id}/comments`).then((l) => {
+        counts[p.id] = l.length;
+        const el = document.querySelector(`[data-cc="${CSS.escape(p.id)}"]`);
+        if (el) el.textContent = l.length;
+      }).catch(() => {});
+    });
   };
   draw();
   $("#cTabs").addEventListener("click", (e) => { const b = e.target.closest("[data-c]"); if (!b) return; cat = b.dataset.c; page = 1; $$("#cTabs .tab").forEach((t) => t.classList.toggle("active", t === b)); draw(); });
@@ -292,53 +308,41 @@ export async function renderCommunity(app, id) {
   $("#cPager").addEventListener("click", (e) => { const b = e.target.closest("[data-p]"); if (b) { page = +b.dataset.p; draw(); } });
 }
 
-// 부원 권한 확인 (아니면 안내)
-export function guardMember(what = "이 기능을 쓰려면") {
-  if (!S.user) { toast(`${what} 먼저 로그인해 주세요.`); S.login(); return false; }
-  if (!isMember()) {
-    modal({
-      title: "부원 전용 기능이에요",
-      body: `<p class="msg">${esc(what)} ASTRO 부원이어야 해요.<br>가입 신청 후 관리자가 승인하면 바로 사용할 수 있어요.</p>`,
-      foot: `<button class="btn" data-close>닫기</button><a class="btn primary" href="#join" data-close>가입 신청하러 가기</a>`
-    });
-    return false;
-  }
-  return true;
-}
-
 async function postDetail(app, id) {
-  app.innerHTML = `${pageHero({ en: "COMMUNITY", ko: "커뮤니티", desc: "관측 후기, 질문, 정보를 자유롭게 나눠요.", bg: "assets/hero-campus.jpg" })}
+  app.innerHTML = `${pageHero({ en: "COMMUNITY", ko: "커뮤니티", desc: "질문, 정보, 후기를 자유롭게 나눠요.", bg: "assets/hero-campus.jpg" })}
     <section class="page"><div class="wrap"><div class="panel hudc" id="pDetail">${loading()}</div></div></section>`;
-  const p = await S.api.get("posts", id);
+  const p = await S.api.get("community_posts", id);
   const box = $("#pDetail");
   if (!box) return;
   if (!p) { box.innerHTML = `<div class="guard">${empty("글을 찾을 수 없어요", "삭제되었거나 주소가 잘못되었어요.")}<div class="acts"><a class="btn" href="#community">목록으로</a></div></div>`; return; }
-  const cpath = `posts/${id}/comments`;
+  S.api.update("community_posts", id, { views: S.api.inc(1) }).catch(() => {});
+  const cpath = `community_posts/${id}/comments`;
+  const author = p.authorName || (p.authorEmail || "").split("@")[0] || "익명";
   box.innerHTML = `
     <div class="article-head">
-      <span class="chip">${esc(p.category || "자유")}</span>
+      ${p.isNotice ? `<span class="chip pin">${icon("pin")}공지</span>` : `<span class="chip">${esc(p.category || "자유")}</span>`}
       <h1>${esc(p.title)}</h1>
-      <div class="meta"><span class="who">${avatar(p.authorPhoto, p.authorName, "sm")}${esc(p.authorName)}</span><span>${fmtDateTime(p.createdAt)}</span>${p.updatedAt ? `<span>(수정됨)</span>` : ""}</div>
+      <div class="meta"><span class="who">${avatar(p.authorPhoto, author, "sm")}${esc(author)}</span><span>${fmtDateTime(p.createdAt)}</span><span>조회 ${(p.views || 0) + 1}</span>${p.updatedAt ? `<span>(수정됨)</span>` : ""}</div>
     </div>
     <div class="article-body">${richText(p.content)}</div>
     <div class="comments">
-      <h3>${icon("comment")} 댓글 <span id="cCount" class="text-dim">${p.commentCount || 0}</span></h3>
+      <h3>${icon("comment")} 댓글 <span id="cCount" class="text-dim"></span></h3>
       <ul class="cmt-list" id="cmts">${loading()}</ul>
-      ${isMember() ? `<form class="cmt-form" id="cmtForm"><label class="sr" for="cmtIn">댓글</label><textarea id="cmtIn" maxlength="1000" placeholder="따뜻한 댓글을 남겨 주세요" required></textarea><button class="btn primary" type="submit">등록</button></form>`
-      : `<p class="text-dim mt-m">${S.user ? "댓글은 부원만 쓸 수 있어요. " : ""}<button class="btn sm" id="cmtLogin">${S.user ? "가입 신청하기" : "로그인하고 댓글 쓰기"}</button></p>`}
+      ${S.user ? `<form class="cmt-form" id="cmtForm"><label class="sr" for="cmtIn">댓글</label><textarea id="cmtIn" maxlength="1000" placeholder="댓글을 남겨 주세요" required></textarea><button class="btn primary" type="submit">등록</button></form>`
+      : `<p class="text-dim mt-m">댓글을 달려면 <button class="btn sm" id="cmtLogin">로그인</button>이 필요해요.</p>`}
     </div>
     <div class="article-actions mt-l">
       <a class="btn" href="#community">${icon("back")} 목록</a>
-      ${canEdit(p.authorUid) ? `<div class="right">${S.user?.uid === p.authorUid ? `<button class="btn" id="pEdit">${icon("edit")} 수정</button>` : ""}<button class="btn danger" id="pDel">${icon("trash")} 삭제</button></div>` : ""}
+      ${canEdit(p.authorEmail) ? `<div class="right">${isMine(p.authorEmail) ? `<button class="btn" id="pEdit">${icon("edit")} 수정</button>` : ""}<button class="btn danger" id="pDel">${icon("trash")} 삭제</button></div>` : ""}
     </div>`;
-  $("#cmtLogin")?.addEventListener("click", () => (S.user ? (location.hash = "#join") : S.login()));
+  $("#cmtLogin")?.addEventListener("click", () => S.login());
   $("#pEdit")?.addEventListener("click", () => postForm(p));
   $("#pDel")?.addEventListener("click", async () => {
     if (!(await confirmDialog("이 글을 삭제할까요? 댓글도 함께 사라져요.", { danger: true, okText: "삭제" }))) return;
     try {
       const cs = await S.api.list(cpath).catch(() => []);
       await Promise.all(cs.map((c) => S.api.remove(cpath, c.id).catch(() => {})));
-      await S.api.remove("posts", id);
+      await S.api.remove("community_posts", id);
       toast("삭제했어요.", "ok"); location.hash = "#community";
     } catch (e) { toast(errMsg(e), "err"); }
   });
@@ -349,18 +353,17 @@ async function postDetail(app, id) {
     let cs = [];
     try { cs = await S.api.list(cpath, { orderBy: ["createdAt", "asc"] }); } catch (e) { ul.innerHTML = `<li class="text-dim">${esc(errMsg(e))}</li>`; return; }
     $("#cCount").textContent = cs.length;
-    ul.innerHTML = cs.map((c) => `<li>${avatar(c.authorPhoto, c.authorName, "sm")}<div><div class="c-name">${esc(c.authorName)}<span class="c-time">${relTime(c.createdAt)}</span></div><div class="c-body">${richText(c.content)}</div></div>
-      ${canEdit(c.authorUid) || S.user?.uid === p.authorUid ? `<button class="btn icon ghost" data-del="${esc(c.id)}" aria-label="댓글 삭제">${icon("trash")}</button>` : "<span></span>"}</li>`).join("") || `<li class="text-dim" style="display:block">아직 댓글이 없어요.</li>`;
+    ul.innerHTML = cs.map((c) => {
+      const cn = c.authorName || (c.authorEmail || "").split("@")[0] || "익명";
+      return `<li>${avatar(c.authorPhoto, cn, "sm")}<div><div class="c-name">${esc(cn)}<span class="c-time">${relTime(c.createdAt)}</span></div><div class="c-body">${richText(c.content)}</div></div>
+      ${canEdit(c.authorEmail) || isMine(p.authorEmail) ? `<button class="btn icon ghost" data-del="${esc(c.id)}" aria-label="댓글 삭제">${icon("trash")}</button>` : "<span></span>"}</li>`;
+    }).join("") || `<li class="text-dim" style="display:block">아직 댓글이 없어요.</li>`;
   };
   loadComments();
   $("#cmts").addEventListener("click", async (e) => {
     const b = e.target.closest("[data-del]");
     if (!b || !(await confirmDialog("댓글을 삭제할까요?", { danger: true, okText: "삭제" }))) return;
-    try {
-      await S.api.remove(cpath, b.dataset.del);
-      await S.api.update("posts", id, { commentCount: S.api.inc(-1) }).catch(() => {});
-      loadComments();
-    } catch (err) { toast(errMsg(err), "err"); }
+    try { await S.api.remove(cpath, b.dataset.del); loadComments(); } catch (err) { toast(errMsg(err), "err"); }
   });
   $("#cmtForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -368,12 +371,8 @@ async function postDetail(app, id) {
     const content = ta.value.trim();
     if (!content) return;
     setBtnBusy(btn, true);
-    try {
-      await S.api.add(cpath, { content, ...authorFields() });
-      await S.api.update("posts", id, { commentCount: S.api.inc(1) }).catch(() => {});
-      ta.value = "";
-      await loadComments();
-    } catch (err) { toast(errMsg(err), "err"); }
+    try { await S.api.add(cpath, { content, ...authorFields() }); ta.value = ""; await loadComments(); }
+    catch (err) { toast(errMsg(err), "err"); }
     setBtnBusy(btn, false);
   });
 }
@@ -387,7 +386,8 @@ function postForm(p = null) {
         <div class="field"><label for="pfC">말머리</label><select id="pfC">${COMMUNITY_CATEGORIES.map((c) => `<option ${p?.category === c ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></div>
         <div class="field" style="grid-column:span 2"><label for="pfT">제목<span class="req">*</span></label><input type="text" id="pfT" maxlength="120" required value="${esc(p?.title || "")}"></div>
       </div>
-      <div class="field"><label for="pfB">내용<span class="req">*</span></label><textarea id="pfB" rows="12" required>${esc(p?.content || "")}</textarea><span class="hint">사진·동영상은 '활동' 메뉴의 활동 기록에 올려 주세요.</span></div>
+      <div class="field"><label for="pfB">내용<span class="req">*</span></label><textarea id="pfB" rows="12" required>${esc(p?.content || "")}</textarea></div>
+      ${isAdmin() ? `<label class="switch"><input type="checkbox" id="pfN" ${p?.isNotice ? "checked" : ""}> 공지로 등록 (목록 맨 위 고정)</label>` : ""}
     </form>`,
     foot: `<button class="btn" data-close>취소</button><button class="btn primary" id="pfSave">${p ? "수정 완료" : "등록"}</button>`,
     onMount(el, ctl) {
@@ -395,11 +395,12 @@ function postForm(p = null) {
       const submit = async () => {
         const title = $("#pfT", el).value.trim(), content = $("#pfB", el).value.trim(), category = $("#pfC", el).value;
         if (!title || !content) return toast("제목과 내용을 입력해 주세요.", "err");
+        const isNotice = isAdmin() && !!$("#pfN", el)?.checked;
         setBtnBusy(save, true); ctl.setBusy(true);
         try {
           let id = p?.id;
-          if (p) await S.api.update("posts", p.id, { title, content, category, updatedAt: S.api.now() });
-          else id = await S.api.add("posts", { title, content, category, commentCount: 0, ...authorFields() });
+          if (p) await S.api.update("community_posts", p.id, { title, content, category, isNotice, updatedAt: S.api.now() });
+          else id = await S.api.add("community_posts", { title, content, category, isNotice, views: 0, ...authorFields() });
           ctl.setBusy(false); ctl.close();
           toast(p ? "수정했어요." : "글을 등록했어요.", "ok");
           if (location.hash === `#community-${id}`) S.rerender(); else location.hash = `#community-${id}`;
@@ -412,106 +413,148 @@ function postForm(p = null) {
 }
 
 // =====================================================================
-// JOIN (가입 신청)
+// JOIN (가입 신청) — 옛 ASTRO 사이트와 같은 방식
+//   Firestore 'applications' (자동 ID), 이메일로 내 신청서를 찾음
+//   필드: studentId, name, phone, email, intro, motivation, q1, q2, extra, status(pending/accepted/rejected)
+//   3·4번 질문 문구: config/apply_questions { q1, q2 }
 // =====================================================================
+export const APP_STATUS = {
+  pending: { label: "검토 중", cls: "pending" },
+  accepted: { label: "합격", cls: "approved" },
+  rejected: { label: "불합격", cls: "rejected" }
+};
+
+export async function findMyApplication() {
+  if (!S.user) return null;
+  const l = await S.api.list("applications", { where: [["email", "==", S.user.email]] });
+  return l[0] || null;
+}
+
 export async function renderJoin(app) {
   const s = S.site;
   app.innerHTML = `
-  ${pageHero({ en: "JOIN ASTRO", ko: "가입하기", desc: "같은 하늘을 바라볼 새 부원을 기다려요.", bg: "assets/hero-dusk.jpg" })}
+  ${pageHero({ en: "APPLY", ko: "가입 신청", desc: "ASTRO와 함께 항공우주공학의 꿈을 키워갈 새로운 부원을 모집합니다.", bg: "assets/hero-dusk.jpg" })}
   <section class="page"><div class="wrap join-layout">
     <aside class="panel hudc">
-      <p class="eyebrow" style="font-family:var(--display);font-size:12px;letter-spacing:.12em;color:var(--blue-200)">RECRUIT</p>
+      <p class="eyebrow">JOIN US</p>
       <h2 style="font-size:24px;margin-top:8px">${esc(s.recruitTitle)}</h2>
-      ${s.recruitPeriod ? `<p class="period mt-s" style="color:var(--gold);display:flex;gap:8px;align-items:center">${icon("calendar")} ${esc(s.recruitPeriod)}</p>` : ""}
+      ${s.recruitPeriod ? `<p class="mt-s" style="color:var(--gold);display:flex;gap:8px;align-items:center">${icon("calendar")} ${esc(s.recruitPeriod)}</p>` : ""}
       <p class="mt-m" style="color:var(--muted)">${lines(s.recruitText)}</p>
       <ol class="steps">
-        <li><span class="num">01</span><div><b>구글 계정으로 로그인</b><span>학교 또는 개인 구글 계정</span></div></li>
-        <li><span class="num">02</span><div><b>신청서 작성</b><span>학번, 관심 분야, 지원 동기</span></div></li>
-        <li><span class="num">03</span><div><b>관리자 승인</b><span>승인되면 활동 기록·커뮤니티 이용 가능</span></div></li>
+        <li><span class="num">01</span><div><b>로그인</b><span>구글 계정 또는 이메일 계정</span></div></li>
+        <li><span class="num">02</span><div><b>지원서 작성</b><span>기본 정보와 지원 문항 작성 · 제출 후에도 검토 전까지 수정 가능</span></div></li>
+        <li><span class="num">03</span><div><b>결과 확인</b><span>이 페이지나 마이페이지에서 합격 여부 확인</span></div></li>
       </ol>
+      ${s.teacher ? `<p class="text-dim mt-m" style="font-size:14px">문의: 지도교사 ${esc(s.teacher)}</p>` : ""}
     </aside>
     <div class="panel" id="joinBox">${loading()}</div>
   </div></section>`;
   const box = $("#joinBox");
-  const u = S.user;
-  if (!u) {
-    box.innerHTML = `<div class="status-card"><div class="status-ico">${sparkle()}</div><p class="big">로그인하고 신청해 주세요</p><p>구글 계정으로 로그인하면 신청서를 작성할 수 있어요.</p>
-      <div class="acts"><button class="google-btn" id="jLogin">${googleG()} Google 계정으로 로그인</button></div></div>`;
+  if (!S.user) {
+    box.innerHTML = `<div class="status-card"><div class="status-ico">${icon("user")}</div><p class="big">로그인이 필요한 서비스예요</p><p>로그인하면 지원서를 작성하고 결과를 확인할 수 있어요.</p>
+      <div class="acts"><button class="btn primary" id="jLogin">로그인 / 회원가입</button></div></div>`;
     $("#jLogin").addEventListener("click", () => S.login());
     return;
   }
-  if (isMember()) {
-    box.innerHTML = `<div class="status-card"><div class="status-ico">${sparkle()}</div><p class="big">이미 ASTRO ${u.role === "admin" ? "관리자" : "부원"}이에요</p><p>${esc(u.realName || u.name)} 님, 오늘도 맑은 하늘이길!</p>
-      <div class="acts"><a class="btn primary" href="#activity">활동 기록 보러 가기</a><a class="btn" href="#community">커뮤니티</a></div></div>`;
-    return;
-  }
   let a = null;
-  try { a = await S.api.get("applications", u.uid); } catch (e) { box.innerHTML = empty("신청 정보를 불러오지 못했어요", errMsg(e)); return; }
+  try { [a] = await Promise.all([findMyApplication(), loadQuestions()]); }
+  catch (e) { box.innerHTML = empty("신청 정보를 불러오지 못했어요", errMsg(e)); return; }
   if (!box.isConnected) return;
-  const showForm = () => joinForm(box, a);
   if (!a) {
     if (!s.recruitOpen) {
       box.innerHTML = `<div class="status-card"><div class="status-ico">${icon("clock")}</div><p class="big">지금은 모집 기간이 아니에요</p><p>모집이 시작되면 공지사항으로 알려드릴게요.</p><div class="acts"><a class="btn" href="#notice">공지사항 보기</a></div></div>`;
       return;
     }
-    return showForm();
+    return joinForm(box, null);
   }
-  const st = { pending: ["검토 중", "신청서를 받았어요. 관리자가 확인한 뒤 승인해 드릴게요."], approved: ["승인 완료", "환영해요! 잠시 후 부원 기능이 열려요. 새로고침해 보세요."], rejected: ["반려됨", "아쉽지만 이번에는 함께하기 어려워요."] }[a.status] || ["검토 중", ""];
+  statusCard(box, a);
+}
+
+function statusCard(box, a) {
+  const st = APP_STATUS[a.status] || APP_STATUS.pending;
+  const msg = { pending: "지원서가 접수되었어요. 결과가 나오기 전까지 언제든 수정할 수 있어요.", accepted: "축하합니다! ASTRO의 새 부원이 되었어요.", rejected: "아쉽지만 이번에는 함께하기 어렵게 되었어요. 지원해 주셔서 감사합니다." }[a.status] || "";
   box.innerHTML = `<div class="status-card">
-    <div class="status-ico">${a.status === "approved" ? icon("check") : a.status === "rejected" ? icon("x") : sparkle()}</div>
-    <p class="mt-m"><span class="chip ${esc(a.status)}">${st[0]}</span></p>
-    <p class="big">${esc(a.name)} 님의 가입 신청</p>
-    <p>${st[1]}</p>
-    <dl class="dl memo"><dt>학번</dt><dd>${esc(a.studentNo)}</dd><dt>관심 분야</dt><dd>${esc((a.interests || []).join(", ") || "-")}</dd><dt>신청일</dt><dd>${fmtDateTime(a.createdAt)}</dd>${a.adminMemo ? `<dt>관리자 메모</dt><dd>${esc(a.adminMemo)}</dd>` : ""}</dl>
+    <div class="status-ico">${a.status === "accepted" ? icon("check") : a.status === "rejected" ? icon("x") : sparkle()}</div>
+    <p class="mt-m"><span class="chip ${st.cls}" style="font-size:14px;height:30px;padding:0 14px">${st.label}</span></p>
+    <p class="big">${esc(a.name)} 님의 지원서</p>
+    <p>${msg}</p>
+    <dl class="dl memo"><dt>학번</dt><dd>${esc(a.studentId || "-")}</dd><dt>전화번호</dt><dd>${esc(a.phone || "-")}</dd><dt>제출일</dt><dd>${fmtDateTime(a.createdAt)}</dd>${a.updatedAt && a.createdAt && a.updatedAt - a.createdAt > 60000 ? `<dt>최근 수정</dt><dd>${fmtDateTime(a.updatedAt)}</dd>` : ""}</dl>
     <div class="acts">
-      ${a.status === "pending" ? `<button class="btn" id="jEdit">${icon("edit")} 신청서 수정</button><button class="btn danger" id="jCancel">신청 취소</button>` : ""}
-      ${a.status === "rejected" && s.recruitOpen ? `<button class="btn primary" id="jEdit">다시 신청하기</button>` : ""}
-      ${a.status === "approved" ? `<button class="btn primary" id="jReload">새로고침</button>` : ""}
+      ${a.status === "pending" || !a.status ? `<button class="btn primary" id="jEdit">${icon("edit")} 지원서 수정</button><button class="btn danger" id="jCancel">신청 취소</button>` : `<button class="btn" id="jView">${icon("eye")} 제출한 지원서 보기</button>`}
     </div></div>`;
-  $("#jEdit")?.addEventListener("click", showForm);
-  $("#jReload")?.addEventListener("click", async () => { await S.api.reloadMe(); S.rerender(); });
+  $("#jEdit")?.addEventListener("click", () => joinForm(box, a));
+  $("#jView")?.addEventListener("click", () => applicationView(a));
   $("#jCancel")?.addEventListener("click", async () => {
-    if (!(await confirmDialog("가입 신청을 취소할까요?", { danger: true, okText: "신청 취소" }))) return;
-    try { await S.api.remove("applications", u.uid); toast("신청을 취소했어요."); S.rerender(); } catch (e) { toast(errMsg(e), "err"); }
+    if (!(await confirmDialog("가입 신청을 취소할까요?\n작성한 지원서가 삭제돼요.", { danger: true, okText: "신청 취소" }))) return;
+    try { await S.api.remove("applications", a.id); toast("신청을 취소했어요."); S.rerender(); } catch (e) { toast(errMsg(e), "err"); }
   });
 }
 
+// 지원서 전체 내용 (신청자 본인 / 관리자 공용) — 문항 개수와 상관없이 표시
+export function applicationAnswersHTML(a) {
+  return `<dl class="dl"><dt>학번</dt><dd>${esc(a.studentId || "-")}</dd><dt>이름</dt><dd>${esc(a.name || "-")}</dd><dt>전화번호</dt><dd>${esc(a.phone || "-")}</dd><dt>이메일</dt><dd>${esc(a.email || "-")}</dd></dl>
+    ${applicationQA(a).map((q, i) => `<div class="qa"><p class="qa-q">${i + 1}. ${esc(q.title)}</p><div class="qa-a">${esc(q.answer || "-")}</div><p class="hint">${String(q.answer || "").length}자</p></div>`).join("")}`;
+}
+function applicationView(a) {
+  modal({ title: "제출한 지원서", wide: true, body: applicationAnswersHTML(a), foot: `<button class="btn primary" data-close>닫기</button>` });
+}
+
+const limitText = (q) => q.min && q.max ? `${q.min}~${q.max}자` : q.max ? `${q.max}자 이내` : q.min ? `${q.min}자 이상` : "";
+
 function joinForm(box, a) {
   const u = S.user;
-  const sel = new Set(a?.interests || []);
+  const qs = S.questionList;
+  const prev = a ? Object.fromEntries(applicationQA(a).map((q) => [q.id, q.answer])) : {};
   box.innerHTML = `<form class="form" id="jf" novalidate>
-    <div><h2 style="font-size:21px">가입 신청서</h2><p class="text-dim mt-s" style="font-size:14px">${esc(u.email)} 계정으로 신청해요.</p></div>
+    <div><h2 style="font-size:21px">${a ? "가입 신청 수정" : "ASTRO 지원서"}</h2><p class="text-dim mt-s" style="font-size:14px">${a ? "작성하신 지원서를 수정할 수 있어요." : "ASTRO와 함께 항공우주공학의 꿈을 키워갈 새로운 부원을 모집합니다."}</p></div>
     <div class="row-2">
-      <div class="field"><label for="jfN">이름<span class="req">*</span></label><input type="text" id="jfN" maxlength="20" required autocomplete="name" value="${esc(a?.name || u.realName || u.name || "")}"></div>
-      <div class="field"><label for="jfS">학번<span class="req">*</span></label><input type="text" id="jfS" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" placeholder="예: 10312" required value="${esc(a?.studentNo || "")}"><span class="hint">학년 1자리 + 반 2자리 + 번호 2자리</span></div>
+      <div class="field"><label for="jfS">학번<span class="req">*</span></label><input type="text" id="jfS" inputmode="numeric" maxlength="6" placeholder="예) 10101" value="${esc(a?.studentId || "")}"></div>
+      <div class="field"><label for="jfN">이름<span class="req">*</span></label><input type="text" id="jfN" maxlength="20" autocomplete="name" value="${esc(a?.name || u.name || "")}"></div>
+      <div class="field"><label for="jfP">전화번호<span class="req">*</span></label><input type="tel" id="jfP" maxlength="13" placeholder="010-0000-0000" autocomplete="tel" value="${esc(a?.phone || "")}"></div>
+      <div class="field"><label for="jfE">이메일</label><input type="email" id="jfE" value="${esc(u.email)}" readonly style="opacity:.7;cursor:not-allowed"><span class="hint">로그인한 계정으로 자동 입력돼요.</span></div>
     </div>
-    <div class="field"><label for="jfP">연락처 <span class="text-dim" style="font-weight:400">(선택)</span></label><input type="tel" id="jfP" maxlength="13" placeholder="010-0000-0000" autocomplete="tel" value="${esc(a?.phone || "")}"></div>
-    <div class="field"><span class="label">관심 분야 <span class="text-dim" style="font-weight:400">(여러 개 선택)</span></span>
-      <div class="checks">${INTERESTS.map((it) => `<label><input type="checkbox" value="${esc(it)}" ${sel.has(it) ? "checked" : ""}><span>${esc(it)}</span></label>`).join("")}</div></div>
-    <div class="field"><label for="jfM">지원 동기<span class="req">*</span></label><textarea id="jfM" rows="5" maxlength="1500" required placeholder="ASTRO에서 해보고 싶은 것, 별을 좋아하게 된 계기 등을 자유롭게 적어 주세요.">${esc(a?.motivation || "")}</textarea></div>
-    <div class="field"><label for="jfE">관측·촬영 경험 <span class="text-dim" style="font-weight:400">(선택)</span></label><textarea id="jfE" rows="3" maxlength="800" placeholder="없어도 괜찮아요!" style="min-height:90px">${esc(a?.experience || "")}</textarea></div>
-    <label class="check-line"><input type="checkbox" id="jfA" ${a ? "checked" : ""}><span>동아리 운영을 위해 이름, 학번, 연락처를 수집·이용하는 데 동의합니다. 정보는 동아리 관리자만 볼 수 있으며 탈퇴 시 삭제를 요청할 수 있어요.</span></label>
-    <div class="form-foot">${a ? `<button type="button" class="btn" id="jfBack">취소</button>` : ""}<button class="btn primary" type="submit">${a ? "신청서 다시 제출" : "가입 신청하기"}</button></div>
+    ${qs.map((q, i) => `
+      <div class="field"><label for="jq_${esc(q.id)}">${i + 1}. ${esc(q.title)}${limitText(q) ? ` <span class="text-dim" style="font-weight:400">[${limitText(q)}]</span>` : ""}${q.required ? '<span class="req">*</span>' : ' <span class="text-dim" style="font-weight:400">(선택)</span>'}</label>
+        <textarea id="jq_${esc(q.id)}" data-qid="${esc(q.id)}" rows="6" ${q.max ? `maxlength="${q.max + 300}"` : ""}>${esc(prev[q.id] || "")}</textarea>
+        <span class="hint cnt" data-cnt="${esc(q.id)}"></span></div>`).join("")}
+    <div class="form-foot">${a ? `<button type="button" class="btn" id="jfBack">취소</button>` : ""}<button class="btn primary" type="submit">${a ? "수정하기" : "제출하기"}</button></div>
   </form>`;
+  const byId = Object.fromEntries(qs.map((q) => [q.id, q]));
+  const updateCnt = (ta) => {
+    const q = byId[ta.dataset.qid], n = ta.value.length, el = box.querySelector(`[data-cnt="${CSS.escape(q.id)}"]`);
+    el.textContent = q.max ? `${n} / ${q.max}자${q.min ? ` (최소 ${q.min}자)` : ""}` : q.min ? `${n}자 (최소 ${q.min}자)` : `${n}자`;
+    el.style.color = (q.max && n > q.max) || (q.min && n > 0 && n < q.min) ? "var(--red)" : "";
+  };
+  box.querySelectorAll("textarea[data-qid]").forEach((ta) => { updateCnt(ta); ta.addEventListener("input", () => updateCnt(ta)); });
   $("#jfBack")?.addEventListener("click", () => S.rerender());
   $("#jf").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const f = e.target;
-    const name = $("#jfN").value.trim(), studentNo = $("#jfS").value.trim(), phone = $("#jfP").value.trim();
-    const motivation = $("#jfM").value.trim(), experience = $("#jfE").value.trim();
-    const interests = $$(".checks input:checked", f).map((c) => c.value);
+    const v = (id) => $("#" + id).value.trim();
+    const answers = {};
+    box.querySelectorAll("textarea[data-qid]").forEach((ta) => { answers[ta.dataset.qid] = ta.value.trim(); });
+    const studentId = v("jfS"), name = v("jfN"), phone = v("jfP");
+    if (!/^\d{4,6}$/.test(studentId)) return toast("학번을 숫자로 입력해 주세요. (예: 10101)", "err");
     if (!name) return toast("이름을 입력해 주세요.", "err");
-    if (!/^\d{5}$/.test(studentNo)) return toast("학번은 숫자 5자리로 입력해 주세요. (예: 10312)", "err");
-    if (phone && !/^[0-9\-\s]{9,13}$/.test(phone)) return toast("연락처 형식을 확인해 주세요.", "err");
-    if (motivation.length < 10) return toast("지원 동기를 10자 이상 적어 주세요.", "err");
-    if (!$("#jfA").checked) return toast("개인정보 수집·이용에 동의해 주세요.", "err");
-    const btn = f.querySelector("button[type=submit]");
+    if (!/^[0-9\-\s]{9,13}$/.test(phone)) return toast("전화번호를 확인해 주세요. (예: 010-0000-0000)", "err");
+    const short = [];
+    for (let i = 0; i < qs.length; i++) {
+      const q = qs[i], t = answers[q.id] || "";
+      if (q.required && !t) { $("#jq_" + CSS.escape(q.id))?.focus(); return toast(`${i + 1}번 문항을 작성해 주세요.`, "err"); }
+      if (q.max && t.length > q.max) { $("#jq_" + CSS.escape(q.id))?.focus(); return toast(`${i + 1}번 문항은 ${q.max}자 이내로 작성해 주세요. (지금 ${t.length}자)`, "err"); }
+      if (q.min && t && t.length < q.min) short.push(`${i + 1}번 (${t.length}자 / 최소 ${q.min}자)`);
+    }
+    if (short.length && !(await confirmDialog(`최소 글자 수보다 짧은 문항이 있어요.\n${short.join("\n")}\n그래도 제출할까요?`, { okText: "제출" }))) return;
+    const data = {
+      studentId, name, phone, email: u.email,
+      answers, questions: qs.map((q) => ({ id: q.id, title: q.title })),
+      status: "pending", updatedAt: S.api.now()
+    };
+    const btn = e.target.querySelector("button[type=submit]");
     setBtnBusy(btn, true);
     try {
-      const data = { name, studentNo, phone, interests, motivation, experience, email: u.email, photo: u.photo || "", status: "pending", adminMemo: "", updatedAt: S.api.now() };
-      if (!a) data.createdAt = S.api.now();
-      await S.api.set("applications", u.uid, data, true);
-      toast(a ? "신청서를 다시 제출했어요." : "가입 신청을 완료했어요!", "ok");
+      if (a) await S.api.update("applications", a.id, data);
+      else await S.api.add("applications", data);
+      toast(a ? "지원서가 수정되었어요." : "지원서가 제출되었어요!", "ok");
       S.rerender();
     } catch (err) { toast(errMsg(err), "err"); setBtnBusy(btn, false); }
   });

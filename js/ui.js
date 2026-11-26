@@ -145,16 +145,16 @@ export function avatar(photo, name, cls = "") {
   if (photo) return `<img class="avatar ${cls}" src="${esc(photo)}" alt="" referrerpolicy="no-referrer" loading="lazy">`;
   return `<span class="avatar ${cls}" aria-hidden="true">${esc(String(name || "?").trim().charAt(0) || "?")}</span>`;
 }
-export const ROLE_LABEL = { admin: "관리자", member: "부원", guest: "일반" };
-export const roleChip = (r) => `<span class="role ${esc(r)}">${ROLE_LABEL[r] || "일반"}</span>`;
+export const ROLE_LABEL = { owner: "운영담당자", admin: "관리자", user: "일반", member: "부원", guest: "일반" };
+export const roleChip = (r) => `<span class="role ${r === "owner" ? "admin" : esc(r)}">${ROLE_LABEL[r] || "일반"}</span>`;
 
 // ---------- 공통 블록 ----------
 export const loading = () => `<div class="loading"><span class="spin" aria-label="불러오는 중"></span></div>`;
 export const empty = (title, sub = "") => `<div class="empty">${sparkle()}<b>${esc(title)}</b>${sub ? esc(sub) : ""}</div>`;
 
 export function pageHero({ en, ko, desc = "", bg = "assets/hero-day.jpg" }) {
-  return `<section class="page-hero" style="--bg:url('${esc(bg)}')">
-    <div class="ph-bg"></div>
+  return `<section class="page-hero">
+    <div class="ph-bg" style="background-image:url('${esc(bg)}')"></div>
     <svg class="hud" data-hud="page" aria-hidden="true"></svg>
     <div class="ph-inner wrap">
       <p class="ph-kicker">Bugil Academy ASTRO</p>
@@ -178,8 +178,20 @@ export function toast(msg, type = "info") {
   root.appendChild(el);
   setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 320); }, type === "err" ? 4600 : 2800);
 }
+const AUTH_ERR = {
+  "auth/user-not-found": "등록되지 않은 이메일입니다.",
+  "auth/wrong-password": "비밀번호가 틀렸습니다.",
+  "auth/invalid-email": "이메일 형식이 잘못되었습니다.",
+  "auth/email-already-in-use": "이미 사용 중인 이메일입니다.",
+  "auth/weak-password": "비밀번호는 6자 이상이어야 합니다.",
+  "auth/popup-closed-by-user": "로그인 창이 닫혔습니다.",
+  "auth/invalid-credential": "이메일 또는 비밀번호가 올바르지 않습니다.",
+  "auth/too-many-requests": "시도가 너무 많아요. 잠시 후 다시 시도해 주세요.",
+  "auth/operation-not-allowed": "이 로그인 방식이 Firebase에서 꺼져 있어요."
+};
 export function errMsg(e) {
   const code = e && (e.code || "");
+  if (AUTH_ERR[code]) return AUTH_ERR[code];
   if (code.includes("permission-denied") || code.includes("unauthorized")) return "권한이 없어요. 로그인 상태나 역할을 확인해 주세요.";
   if (code.includes("unavailable") || code.includes("network")) return "네트워크 연결을 확인해 주세요.";
   if (code.includes("unauthorized-domain")) return "이 도메인이 Firebase 인증 허용 도메인에 등록되지 않았어요.";
@@ -313,15 +325,15 @@ export async function prepareImage(file, maxSide = 2048, quality = 0.86) {
 }
 
 // ---------- 미디어 업로더 ----------
-export function mediaField(host, { initial = [], accept = "image/*,video/*", multiple = true, max = 20, limits }) {
+export function mediaField(host, { initial = [], accept = "image/*", multiple = true, max = 20, limits }) {
   let kept = initial.filter((m) => m.type === "image" || m.type === "video").slice();
   const removed = [];
   let added = []; // {file, url}
   host.innerHTML = `
     <label class="drop" tabindex="0">
       ${icon("upload")}
-      <span>사진·동영상을 끌어다 놓거나 <b>눌러서 선택</b></span>
-      <small>사진 최대 ${limits.imageMB}MB · 동영상 최대 ${limits.videoMB}MB · 최대 ${max}개</small>
+      <span>사진을 끌어다 놓거나 <b>눌러서 선택</b></span>
+      <small>JPG · PNG · WEBP · GIF · 사진 1장 최대 ${limits.imageMB}MB · 최대 ${max}장</small>
       <input type="file" accept="${accept}" ${multiple ? "multiple" : ""} hidden>
     </label>
     <div class="thumbs mt-s"></div>`;
@@ -337,10 +349,9 @@ export function mediaField(host, { initial = [], accept = "image/*,video/*", mul
   const addFiles = (files) => {
     for (const f of files) {
       const isImg = f.type.startsWith("image/"), isVid = f.type.startsWith("video/");
-      if (!isImg && !isVid) { toast(`${f.name}: 사진이나 동영상만 올릴 수 있어요.`, "err"); continue; }
-      if (!accept.includes("video") && isVid) { toast("여기에는 사진만 올릴 수 있어요.", "err"); continue; }
-      if (isImg && f.size > limits.imageMB * 1024 * 1024 * 3) { toast(`${f.name}: 사진이 너무 커요.`, "err"); continue; }
-      if (isVid && f.size > limits.videoMB * 1024 * 1024) { toast(`${f.name}: 동영상은 ${limits.videoMB}MB 이하만 가능해요.`, "err"); continue; }
+      if (isVid) { toast(`${f.name}: 동영상은 올릴 수 없어요. 유튜브 링크를 이용해 주세요.`, "err"); continue; }
+      if (!isImg || !/image\/(jpeg|png|webp|gif)/.test(f.type)) { toast(`${f.name}: JPG·PNG·WEBP·GIF 사진만 올릴 수 있어요.`, "err"); continue; }
+      if (f.size > limits.imageMB * 1024 * 1024 * 4) { toast(`${f.name}: 사진이 너무 커요.`, "err"); continue; }
       if (!multiple) { added.forEach((a) => URL.revokeObjectURL(a.url)); added = []; kept.forEach((k) => removed.push(k)); kept = []; }
       if (kept.length + added.length >= max) { toast(`최대 ${max}개까지 올릴 수 있어요.`, "err"); break; }
       added.push({ file: f, url: URL.createObjectURL(f) });

@@ -1,7 +1,7 @@
 // 데모 모드: Firebase 설정 전, 이 브라우저 안에서만 동작하는 가짜 백엔드입니다.
 // 모든 데이터는 localStorage 에 저장되며 다른 사람에게 보이지 않습니다.
 
-const KEY = "astro-demo-v2";
+const KEY = "astro-demo-v4";
 const SESSION_KEY = "astro-demo-user";
 const NOW = { __now: 1 };
 
@@ -16,10 +16,11 @@ const monthOf = (offsetDays) => new Date(Date.now() + offsetDays * DAY).getMonth
 const ago = (days, hours = 0) => Date.now() - days * DAY - hours * 3600000;
 
 export const DEMO_IDENTITIES = [
-  { uid: "demo-admin", name: "김별", email: "byeol.kim@astro.demo", role: "admin", desc: "관리자 — 배너·공지·가입 신청·회원 관리" },
-  { uid: "demo-member", name: "이은하", email: "eunha.lee@astro.demo", role: "member", desc: "부원 — 활동 기록·커뮤니티 글쓰기" },
-  { uid: "demo-guest", name: "박하늘", email: "haneul.park@astro.demo", role: "guest", desc: "일반 학생 — 가입 신청해 보기" }
+  { uid: "demo-admin", name: "김별", email: "byeol.kim@astro.demo", role: "owner", desc: "운영담당자 — 합격/불합격, 관리자 임명, 지원 질문" },
+  { uid: "demo-member", name: "이은하", email: "eunha.lee@astro.demo", role: "admin", desc: "관리자 — 공지·활동·일정 등록, 지원서 열람" },
+  { uid: "demo-guest", name: "박하늘", email: "haneul.park@astro.demo", role: "user", desc: "일반 학생 — 가입 신청해 보기" }
 ];
+const DEMO_OWNERS = ["byeol.kim@astro.demo"];
 
 function seed() {
   const users = {};
@@ -36,11 +37,10 @@ function seed() {
   addUser("g-seo", "서북두", "bukdu.seo@astro.demo", "guest");
 
   const applications = {
-    "g-yoon": { name: "윤혜성", studentNo: "10415", phone: "010-0000-0000", email: "hyeseong.yoon@astro.demo", interests: ["천체 사진", "우주 과학"], motivation: "중학생 때 처음 은하수 사진을 보고 직접 찍어보고 싶다는 꿈이 생겼습니다. 장비 다루는 법을 배우고 꾸준히 기록을 남기고 싶어요.", experience: "스마트폰으로 달 사진을 몇 번 찍어 봤습니다.", status: "pending", adminMemo: "", createdAt: ago(1, 3) },
-    "g-seo": { name: "서북두", studentNo: "10103", phone: "", email: "bukdu.seo@astro.demo", interests: ["천체 관측", "천문학 이론", "탐구 발표"], motivation: "과학 탐구 대회에서 항성의 분광형을 주제로 발표해 보고 싶습니다. 함께 관측하며 데이터를 모을 수 있는 동아리를 찾고 있었어요.", experience: "", status: "pending", adminMemo: "", createdAt: ago(0, 5) },
-    "m-han": { name: "한오로라", studentNo: "20109", phone: "", email: "aurora.han@astro.demo", interests: ["천문학 이론"], motivation: "별의 일생에 관심이 많습니다.", experience: "", status: "approved", adminMemo: "환영합니다!", createdAt: ago(250), reviewedAt: ago(248) }
+    [rid()]: { studentId: "10415", name: "윤혜성", phone: "010-0000-0000", email: "hyeseong.yoon@astro.demo", intro: "물리학, 특히 유체역학에 관심이 많아 지원하게 되었습니다.", motivation: "중학교 때 페트병 로켓의 날개 모양을 바꿔 가며 비행 거리를 비교하는 실험을 했습니다.", q1: "CFD 프로그램을 배워 보고 싶습니다.", q2: "꾸준히 기록하는 습관이 있습니다.", extra: "", q1Label: "질문 3", q2Label: "질문 4", status: "pending", createdAt: ago(1, 3) },
+    [rid()]: { studentId: "10103", name: "서북두", phone: "010-0000-0000", email: "bukdu.seo@astro.demo", intro: "수학과 물리를 좋아합니다.", motivation: "아두이노로 자세 제어 장치를 만들어 본 경험이 있습니다.", q1: "로켓 실험", q2: "팀 프로젝트 경험", extra: "열심히 하겠습니다!", q1Label: "질문 3", q2Label: "질문 4", status: "pending", createdAt: ago(0, 5) }
   };
-
+  const admins = { "eunha.lee@astro.demo": { addedBy: "byeol.kim@astro.demo", addedAt: ago(30) } };
   const notices = {};
   const addNotice = (title, content, pinned, days, author = "김별") => {
     notices[rid()] = { title, content, pinned, authorUid: "demo-admin", authorName: author, createdAt: ago(days, 2) };
@@ -54,8 +54,9 @@ function seed() {
   const posts = {}, comments = {};
   const addPost = (category, title, content, uid, name, days, cmts = []) => {
     const id = rid();
-    posts[id] = { category, title, content, authorUid: uid, authorName: name, authorPhoto: "", createdAt: ago(days, 4), commentCount: cmts.length };
-    comments[`posts/${id}/comments`] = Object.fromEntries(cmts.map(([cu, cn, txt], i) => [rid(), { content: txt, authorUid: cu, authorName: cn, authorPhoto: "", createdAt: ago(days, 3 - i) }]));
+    const em = (u) => (users[u] || {}).email || "";
+    posts[id] = { category, title, content, authorEmail: em(uid), authorName: name, authorPhoto: "", createdAt: ago(days, 4), views: 3 + cmts.length * 4 };
+    comments[`community_posts/${id}/comments`] = Object.fromEntries(cmts.map(([cu, cn, txt], i) => [rid(), { content: txt, authorEmail: em(cu), authorName: cn, authorPhoto: "", createdAt: ago(days, 3 - i) }]));
   };
   addPost("정보", "이번 달 밤하늘 볼거리 정리", "· 목성: 해가 진 뒤 동쪽 하늘에서 가장 밝게 보여요.\n· 토성: 초저녁 남서쪽. 고리가 꽤 얇게 보이는 시기예요.\n· 쌍둥이자리 유성우: 극대기 전후 이틀 밤이 좋아요.\n관측 계획 세울 때 참고하세요!", "m-han", "한오로라", 9, [["demo-member", "이은하", "정리 감사해요! 유성우 날 날씨만 좋았으면…"]]);
   addPost("질문", "스마트폰으로 달 사진 잘 찍는 법 있을까요?", "망원경 접안렌즈에 폰을 대고 찍으면 자꾸 흔들리고 초점이 안 맞아요. 다들 어떻게 찍으시나요?", "m-choi", "최유성", 7, [
@@ -70,7 +71,7 @@ function seed() {
   const activities = {};
   const media = (...names) => names.map((n) => ({ url: `assets/${n}`, path: "", type: "image", name: n.split("/").pop() }));
   const addAct = (offset, title, place, content, m, uid = "demo-member", name = "이은하") => {
-    activities[rid()] = { date: ymd(offset), title, place, content, media: m, authorUid: uid, authorName: name, authorPhoto: "", createdAt: ago(Math.max(0, -offset), 1) };
+    activities[rid()] = { date: ymd(offset), title, place, content, media: m, category: "기타", authorEmail: (users[uid] || {}).email || "", authorName: name, authorPhoto: "", createdAt: ago(Math.max(0, -offset), 1) };
   };
   addAct(-40, "천문대 견학", "시립 천문대", "천문대 주망원경으로 성단을 관측하고, 천체투영관에서 계절별 별자리 해설을 들었습니다. 연구원 선생님께 관측 기록 남기는 법도 배웠어요.", media("hero-night.jpg"), "demo-admin", "김별");
   addAct(-23, `${monthOf(-23)}월 정기 관측회 — 달과 목성`, "본관 옥상", "상현달 표면의 크레이터와 목성의 갈릴레이 위성 4개를 관측했습니다. 신입 부원들도 직접 망원경 초점을 맞춰 봤어요.", media("demo/moon.jpg"));
@@ -80,7 +81,8 @@ function seed() {
   addAct(-1, "정기 회의 · 겨울 관측 계획", "지구과학실", "다음 달 유성우 관측 일정과 준비물, 역할 분담을 정했습니다. 핫팩은 동아리 예산으로 구입하기로!", [], "demo-admin", "김별");
   addAct(17, "쌍둥이자리 유성우 관측 (예정)", "운동장", "올해 마지막 유성우 관측입니다. 참여 신청은 공지사항을 확인해 주세요.", [], "demo-admin", "김별");
 
-  return { cols: { users, applications, notices, posts, ...comments, activities, banners: {}, settings: {} } };
+  const events = { [rid()]: { title: "정기 회의", date: ymd(3), endDate: null, note: "과학관 실험실", category: 0, createdBy: "byeol.kim@astro.demo", createdAt: ago(1) } };
+  return { cols: { users, applications, admins, notices, community_posts: posts, ...comments, activity_posts: activities, events, config: {} } };
 }
 
 export function createDemo() {
@@ -112,7 +114,8 @@ export function createDemo() {
   function makeUser(uid) {
     const u = store.cols.users?.[uid];
     if (!u) return null;
-    return { uid, email: u.email, name: u.name, photo: u.photo || "", role: u.role || "guest", realName: u.realName || "", studentNo: u.studentNo || "" };
+    const role = DEMO_OWNERS.includes(u.email) ? "owner" : store.cols.admins?.[u.email] ? "admin" : "user";
+    return { uid, email: u.email, name: u.name, photo: u.photo || "", role, theme: u.theme || "" };
   }
   const emit = () => listeners.forEach((cb) => cb(current));
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -143,6 +146,7 @@ export function createDemo() {
       try { sessionStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
       emit();
     },
+    async saveTheme(theme) { if (current && store.cols.users[current.uid]) { store.cols.users[current.uid].theme = theme; persist(); } },
     async reloadMe() { if (current) { current = makeUser(current.uid); emit(); } return current; },
     reset() {
       store = seed();
@@ -226,6 +230,7 @@ export function createDemo() {
       onProgress && onProgress(1);
       return { url, path: `demo/${folder}/${rid()}`, type: isVideo ? "video" : "image", name: file.name || "", size: file.size || 0, ...(isVideo ? { ephemeral: true } : {}) };
     },
-    async deleteFile() {}
+    async deleteFile() {},
+    async syncUploaders() { return { ok: true, added: 0, removed: 0 }; }
   };
 }
