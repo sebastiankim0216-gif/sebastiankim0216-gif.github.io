@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// ASTRO Storage 보안 규칙
+// ⚠️ 아래 ADMIN 이메일 목록을 js/config.js 의 ADMIN_EMAILS 와 똑같이 바꿔 주세요.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() { return request.auth != null; }
+    function userPath() { return /databases/(default)/documents/users/$(request.auth.uid); }
+    function adminEmail() {
+      return signedIn() && request.auth.token.email != null
+        && request.auth.token.email.lower() in ['admin@example.com'];
+    }
+    function isAdmin() {
+      return signedIn() && (adminEmail()
+        || (firestore.exists(userPath()) && firestore.get(userPath()).data.role == 'admin'));
+    }
+    function isMember() {
+      return signedIn() && (isAdmin()
+        || (firestore.exists(userPath()) && firestore.get(userPath()).data.role == 'member'));
+    }
+    function isImage(maxMB) {
+      return request.resource.contentType.matches('image/.*') && request.resource.size < maxMB * 1024 * 1024;
+    }
+    function isVideo(maxMB) {
+      return request.resource.contentType.matches('video/.*') && request.resource.size < maxMB * 1024 * 1024;
+    }
+
+    // 메인 배너 사진: 관리자만 업로드
+    match /banners/{uid}/{file} {
+      allow read: if true;
+      allow create, update: if isAdmin() && request.auth.uid == uid && isImage(20);
+      allow delete: if isAdmin();
+    }
+
+    // 활동 기록 사진·동영상: 부원이 자기 폴더에만 업로드 (사진 20MB, 동영상 200MB 이하)
+    match /activities/{uid}/{file} {
+      allow read: if true;
+      allow create, update: if isMember() && request.auth.uid == uid && (isImage(20) || isVideo(200));
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+  }
+}
