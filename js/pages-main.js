@@ -1,11 +1,11 @@
 // 홈 · 소개 · 공지사항 · 커뮤니티 · 가입하기
-import { S, isAdmin, isOwner, isMine, canEdit, isDemo, slides, authorFields, normActivity, loadQuestions, applicationQA } from "./state.js?v=202611261642";
-import { COMMUNITY_CATEGORIES } from "./config.js?v=202611261642";
+import { S, isAdmin, isOwner, isMine, canEdit, isDemo, slides, authorFields, normActivity, loadQuestions, applicationQA, isMuted } from "./state.js?v=202611271625";
+import { COMMUNITY_CATEGORIES, COMMUNITY_DAILY_LIMIT } from "./config.js?v=202611271625";
 import {
   $, $$, esc, lines, richText, excerpt, parsePairs, safeLink, isExternal, icon, sparkle, compassStar, wordmark, orbitSVG,
   avatar, loading, empty, pageHero, secHead, toast, errMsg, modal, confirmDialog, setBtnBusy, fmtDate, fmtDateTime, relTime, isNew, ymd
-} from "./ui.js?v=202611261642";
-import { actCard, firstImage } from "./pages-activity.js?v=202611261642";
+} from "./ui.js?v=202611271625";
+import { actCard, firstImage } from "./pages-activity.js?v=202611271625";
 
 const ARROW = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>`;
 const PAGE_SIZE = 10;
@@ -56,7 +56,7 @@ export async function renderHome(app) {
         </div>
       </div>
       <div class="sec">
-        ${secHead("GALLERY", "우리가 함께 본 하늘", `<a class="more" href="#gallery">전체 보기 ${icon("right")}</a>`)}
+        ${secHead("GALLERY", "우리의 활동 순간", `<a class="more" href="#gallery">전체 보기 ${icon("right")}</a>`)}
         <div class="gal-strip" id="hGal"></div>
       </div>
       ${S.site.recruitOpen && !isAdmin() ? `<div class="sec">${recruitBand()}</div>` : ""}
@@ -206,7 +206,7 @@ async function noticeDetail(app, id) {
       <h1>${esc(n.title)}</h1>
       <div class="meta"><span class="who">${avatar("", n.authorName || "관")}${esc(n.authorName || "관리자")}</span><span>${fmtDateTime(n.createdAt)}</span>${n.updatedAt && n.updatedAt - n.createdAt > 60000 ? `<span>수정 ${fmtDateTime(n.updatedAt)}</span>` : ""}</div>
     </div>
-    <div class="article-body">${richText(n.content)}</div>
+    <div class="article-body">${richText(n.content)}${noticeTable(n)}${n.contentAfter ? `<div class="mt-l">${richText(n.contentAfter)}</div>` : ""}</div>
     <div class="article-actions">
       <a class="btn" href="#notice">${icon("back")} 목록</a>
       ${isAdmin() ? `<div class="right"><button class="btn" id="nEdit">${icon("edit")} 수정</button><button class="btn danger" id="nDel">${icon("trash")} 삭제</button></div>` : ""}
@@ -222,13 +222,24 @@ async function noticeDetail(app, id) {
   });
 }
 
+// 공지 안의 표 (합격자 발표 등)
+export function noticeTable(n) {
+  const t = n && n.table;
+  if (!t || !Array.isArray(t.headers) || !Array.isArray(t.rows)) return "";
+  return `<div class="table-wrap notice-table"><table class="tbl"><thead><tr>${t.headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+    <tbody>${t.rows.map((r) => `<tr>${(Array.isArray(r) ? r : Array.isArray(r.cells) ? r.cells : Object.values(r)).map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    ${t.caption ? `<p class="hint mt-s">${esc(t.caption)}</p>` : ""}</div>`;
+}
+
 export function noticeForm(n = null, after) {
   modal({
     title: n ? "공지 수정" : "공지 작성",
     wide: true,
     body: `<form class="form" id="nf">
       <div class="field"><label for="nfT">제목<span class="req">*</span></label><input type="text" id="nfT" maxlength="120" required value="${esc(n?.title || "")}"></div>
-      <div class="field"><label for="nfC">내용<span class="req">*</span></label><textarea id="nfC" rows="12" required>${esc(n?.content || "")}</textarea><span class="hint">링크(https://…)는 자동으로 연결돼요.</span></div>
+      <div class="field"><label for="nfC">${n?.table ? "표 위 내용" : "내용"}<span class="req">*</span></label><textarea id="nfC" rows="${n?.table ? 6 : 12}" required>${esc(n?.content || "")}</textarea><span class="hint">링크(https://…)는 자동으로 연결돼요.</span></div>
+      ${n?.table ? `<div class="field"><span class="label">자동으로 만든 표 (${n.table.rows.length}줄)</span>${noticeTable(n)}</div>
+      <div class="field"><label for="nfA">표 아래 내용</label><textarea id="nfA" rows="5" style="min-height:120px">${esc(n?.contentAfter || "")}</textarea></div>` : ""}
       <label class="switch"><input type="checkbox" id="nfP" ${n?.pinned ? "checked" : ""}> 목록 맨 위에 고정</label>
     </form>`,
     foot: `<button class="btn" data-close>취소</button><button class="btn primary" id="nfSave">${n ? "수정 완료" : "등록"}</button>`,
@@ -240,6 +251,7 @@ export function noticeForm(n = null, after) {
         setBtnBusy(save, true); ctl.setBusy(true);
         try {
           const data = { title, content, pinned: $("#nfP", el).checked };
+          if (n?.table) data.contentAfter = $("#nfA", el).value.trim();
           let id = n?.id;
           if (n) await S.api.update("notices", n.id, { ...data, updatedAt: S.api.now() });
           else id = await S.api.add("notices", { ...data, authorEmail: S.user.email, authorName: S.user.name });
@@ -262,6 +274,20 @@ export function guardLogin(what = "이 기능을 쓰려면") {
   return true;
 }
 export const guardMember = guardLogin;
+function guardMute() {
+  if (isMuted()) { toast("커뮤니티 글쓰기가 제한된 계정이에요. 운영진에게 문의해 주세요.", "err"); return false; }
+  return true;
+}
+// 하루 글쓰기 제한 (오늘 0시부터 쓴 글 수)
+async function underDailyLimit() {
+  if (isAdmin()) return true;
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  let mine = [];
+  try { mine = await S.api.list("community_posts", { where: [["authorEmail", "==", S.user.email]] }); } catch { return true; }
+  const today = mine.filter((p) => (p.createdAt || 0) >= start.getTime()).length;
+  if (today >= COMMUNITY_DAILY_LIMIT) { toast(`커뮤니티 글은 하루에 ${COMMUNITY_DAILY_LIMIT}개까지 쓸 수 있어요. 내일 다시 써 주세요.`, "err"); return false; }
+  return true;
+}
 
 export async function renderCommunity(app, id) {
   if (id) return postDetail(app, id);
@@ -273,7 +299,7 @@ export async function renderCommunity(app, id) {
     <div class="post-list" id="cList">${loading()}</div>
     <div class="pager" id="cPager"></div>
   </div></section>`;
-  $("#cWrite").addEventListener("click", () => { if (guardLogin("글을 쓰려면")) postForm(); });
+  $("#cWrite").addEventListener("click", async () => { if (guardLogin("글을 쓰려면") && guardMute() && (await underDailyLimit())) postForm(); });
   let all = [];
   try { all = await S.api.list("community_posts", { orderBy: ["createdAt", "desc"], limit: 500 }); }
   catch (e) { $("#cList").innerHTML = empty("글을 불러오지 못했어요", errMsg(e)); return; }
@@ -347,33 +373,60 @@ async function postDetail(app, id) {
     } catch (e) { toast(errMsg(e), "err"); }
   });
 
+  // 댓글 + 답글(1단계까지)
+  let replyTo = null;
   const loadComments = async () => {
     const ul = $("#cmts");
     if (!ul) return;
     let cs = [];
     try { cs = await S.api.list(cpath, { orderBy: ["createdAt", "asc"] }); } catch (e) { ul.innerHTML = `<li class="text-dim">${esc(errMsg(e))}</li>`; return; }
     $("#cCount").textContent = cs.length;
-    ul.innerHTML = cs.map((c) => {
+    const tops = cs.filter((c) => !c.parentId), kids = (id) => cs.filter((c) => c.parentId === id);
+    const one = (c, isReply) => {
       const cn = c.authorName || (c.authorEmail || "").split("@")[0] || "익명";
-      return `<li>${avatar(c.authorPhoto, cn, "sm")}<div><div class="c-name">${esc(cn)}<span class="c-time">${relTime(c.createdAt)}</span></div><div class="c-body">${richText(c.content)}</div></div>
-      ${canEdit(c.authorEmail) || isMine(p.authorEmail) ? `<button class="btn icon ghost" data-del="${esc(c.id)}" aria-label="댓글 삭제">${icon("trash")}</button>` : "<span></span>"}</li>`;
-    }).join("") || `<li class="text-dim" style="display:block">아직 댓글이 없어요.</li>`;
+      return `<li class="${isReply ? "reply" : ""}">${avatar(c.authorPhoto, cn, "sm")}<div><div class="c-name">${isReply ? `<span class="re">${icon("right")}</span>` : ""}${esc(cn)}<span class="c-time">${relTime(c.createdAt)}</span></div><div class="c-body">${richText(c.content)}</div>
+        ${!isReply && S.user && !isMuted() ? `<button class="btn sm ghost c-reply" data-reply="${esc(c.id)}" type="button">답글</button>` : ""}
+        ${!isReply && replyTo === c.id ? `<form class="cmt-form reply-form" data-parent="${esc(c.id)}"><label class="sr" for="rIn">답글</label><textarea id="rIn" maxlength="1000" placeholder="${esc(cn)} 님에게 답글" required></textarea><span style="display:flex;gap:6px"><button class="btn primary" type="submit">등록</button><button class="btn" type="button" data-cancel>취소</button></span></form>` : ""}</div>
+        ${canEdit(c.authorEmail) || isMine(p.authorEmail) ? `<button class="btn icon ghost" data-del="${esc(c.id)}" aria-label="댓글 삭제">${icon("trash")}</button>` : "<span></span>"}</li>`;
+    };
+    ul.innerHTML = tops.map((c) => one(c, false) + kids(c.id).map((r) => one(r, true)).join("")).join("") || `<li class="text-dim" style="display:block">아직 댓글이 없어요.</li>`;
+    ul.querySelector("#rIn")?.focus();
   };
   loadComments();
+  const addComment = async (content, parentId, btn) => {
+    if (!guardMute()) return false;
+    setBtnBusy(btn, true);
+    try { await S.api.add(cpath, { content, parentId: parentId || null, ...authorFields() }); return true; }
+    catch (err) { toast(errMsg(err), "err"); return false; }
+    finally { setBtnBusy(btn, false); }
+  };
   $("#cmts").addEventListener("click", async (e) => {
+    const r = e.target.closest("[data-reply]");
+    if (r) { replyTo = replyTo === r.dataset.reply ? null : r.dataset.reply; return loadComments(); }
+    if (e.target.closest("[data-cancel]")) { replyTo = null; return loadComments(); }
     const b = e.target.closest("[data-del]");
-    if (!b || !(await confirmDialog("댓글을 삭제할까요?", { danger: true, okText: "삭제" }))) return;
-    try { await S.api.remove(cpath, b.dataset.del); loadComments(); } catch (err) { toast(errMsg(err), "err"); }
+    if (!b || !(await confirmDialog("댓글을 삭제할까요? 답글도 함께 지워져요.", { danger: true, okText: "삭제" }))) return;
+    try {
+      const all = await S.api.list(cpath).catch(() => []);
+      await Promise.all(all.filter((c) => c.parentId === b.dataset.del).map((c) => S.api.remove(cpath, c.id).catch(() => {})));
+      await S.api.remove(cpath, b.dataset.del);
+      loadComments();
+    } catch (err) { toast(errMsg(err), "err"); }
+  });
+  $("#cmts").addEventListener("submit", async (e) => {
+    const f = e.target.closest(".reply-form");
+    if (!f) return;
+    e.preventDefault();
+    const ta = f.querySelector("textarea"), content = ta.value.trim();
+    if (!content) return;
+    if (await addComment(content, f.dataset.parent, f.querySelector("button[type=submit]"))) { replyTo = null; loadComments(); }
   });
   $("#cmtForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const ta = $("#cmtIn"), btn = e.target.querySelector("button");
     const content = ta.value.trim();
     if (!content) return;
-    setBtnBusy(btn, true);
-    try { await S.api.add(cpath, { content, ...authorFields() }); ta.value = ""; await loadComments(); }
-    catch (err) { toast(errMsg(err), "err"); }
-    setBtnBusy(btn, false);
+    if (await addComment(content, null, btn)) { ta.value = ""; await loadComments(); }
   });
 }
 
@@ -472,7 +525,8 @@ export async function renderJoin(app) {
 
 function statusCard(box, a) {
   const st = APP_STATUS[a.status] || APP_STATUS.pending;
-  const msg = { pending: "지원서가 접수되었어요. 결과가 나오기 전까지 언제든 수정할 수 있어요.", accepted: "축하합니다! ASTRO의 새 부원이 되었어요.", rejected: "아쉽지만 이번에는 함께하기 어렵게 되었어요. 지원해 주셔서 감사합니다." }[a.status] || "";
+  const canEditApp = (a.status === "pending" || !a.status) && S.site.recruitOpen;
+  const msg = { pending: S.site.recruitOpen ? "지원서가 접수되었어요. 모집 기간 동안은 수정할 수 있어요. 결과는 발표일에 이 페이지와 공지사항에서 확인할 수 있어요." : "지원서가 접수되었어요. 모집이 마감되어 지금은 수정할 수 없어요. 결과 발표를 기다려 주세요.", accepted: "축하합니다! ASTRO의 새 부원이 되었어요.", rejected: "아쉽지만 이번에는 함께하기 어렵게 되었어요. 지원해 주셔서 감사합니다." }[a.status] || "";
   box.innerHTML = `<div class="status-card">
     <div class="status-ico">${a.status === "accepted" ? icon("check") : a.status === "rejected" ? icon("x") : sparkle()}</div>
     <p class="mt-m"><span class="chip ${st.cls}" style="font-size:14px;height:30px;padding:0 14px">${st.label}</span></p>
@@ -480,7 +534,7 @@ function statusCard(box, a) {
     <p>${msg}</p>
     <dl class="dl memo"><dt>학번</dt><dd>${esc(a.studentId || "-")}</dd><dt>전화번호</dt><dd>${esc(a.phone || "-")}</dd><dt>제출일</dt><dd>${fmtDateTime(a.createdAt)}</dd>${a.updatedAt && a.createdAt && a.updatedAt - a.createdAt > 60000 ? `<dt>최근 수정</dt><dd>${fmtDateTime(a.updatedAt)}</dd>` : ""}</dl>
     <div class="acts">
-      ${a.status === "pending" || !a.status ? `<button class="btn primary" id="jEdit">${icon("edit")} 지원서 수정</button><button class="btn danger" id="jCancel">신청 취소</button>` : `<button class="btn" id="jView">${icon("eye")} 제출한 지원서 보기</button>`}
+      ${canEditApp ? `<button class="btn primary" id="jEdit">${icon("edit")} 지원서 수정</button><button class="btn danger" id="jCancel">신청 취소</button>` : ""}<button class="btn" id="jView">${icon("eye")} 제출한 지원서 보기</button>
     </div></div>`;
   $("#jEdit")?.addEventListener("click", () => joinForm(box, a));
   $("#jView")?.addEventListener("click", () => applicationView(a));
@@ -504,20 +558,33 @@ const limitText = (q) => q.min && q.max ? `${q.min}~${q.max}자` : q.max ? `${q.
 function joinForm(box, a) {
   const u = S.user;
   const qs = S.questionList;
-  const prev = a ? Object.fromEntries(applicationQA(a).map((q) => [q.id, q.answer])) : {};
+  // 임시저장: 이 브라우저에 자동 저장 (계정별)
+  const DKEY = `astro-apply-draft:${u.email}`;
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem(DKEY) || "null"); } catch { draft = null; }
+  if (draft && a && draft.at < (a.updatedAt || a.createdAt || 0)) draft = null;
+  const prevApp = a ? Object.fromEntries(applicationQA(a).map((q) => [q.id, q.answer])) : {};
+  const prev = { ...prevApp, ...(draft?.answers || {}) };
+  const base = { studentId: draft?.studentId ?? a?.studentId ?? "", name: draft?.name ?? a?.name ?? u.name ?? "", phone: draft?.phone ?? a?.phone ?? "" };
   box.innerHTML = `<form class="form" id="jf" novalidate>
+    ${draft ? `<div class="notice-box"><span>${icon("clock")} ${fmtDateTime(draft.at)}에 임시저장한 내용을 불러왔어요.</span><button type="button" class="btn sm" id="jfDraftClear">임시저장 지우기</button></div>` : ""}
     <div><h2 style="font-size:21px">${a ? "가입 신청 수정" : "ASTRO 지원서"}</h2><p class="text-dim mt-s" style="font-size:14px">${a ? "작성하신 지원서를 수정할 수 있어요." : "ASTRO와 함께 항공우주공학의 꿈을 키워갈 새로운 부원을 모집합니다."}</p></div>
     <div class="row-2">
-      <div class="field"><label for="jfS">학번<span class="req">*</span></label><input type="text" id="jfS" inputmode="numeric" maxlength="6" placeholder="예) 10101" value="${esc(a?.studentId || "")}"></div>
-      <div class="field"><label for="jfN">이름<span class="req">*</span></label><input type="text" id="jfN" maxlength="20" autocomplete="name" value="${esc(a?.name || u.name || "")}"></div>
-      <div class="field"><label for="jfP">전화번호<span class="req">*</span></label><input type="tel" id="jfP" maxlength="13" placeholder="010-0000-0000" autocomplete="tel" value="${esc(a?.phone || "")}"></div>
+      <div class="field"><label for="jfS">학번<span class="req">*</span></label><input type="text" id="jfS" inputmode="numeric" maxlength="6" placeholder="예) 10101" value="${esc(base.studentId)}"></div>
+      <div class="field"><label for="jfN">이름<span class="req">*</span></label><input type="text" id="jfN" maxlength="20" autocomplete="name" value="${esc(base.name)}"></div>
+      <div class="field"><label for="jfP">전화번호<span class="req">*</span></label><input type="tel" id="jfP" maxlength="13" placeholder="010-0000-0000" autocomplete="tel" value="${esc(base.phone)}"></div>
       <div class="field"><label for="jfE">이메일</label><input type="email" id="jfE" value="${esc(u.email)}" readonly style="opacity:.7;cursor:not-allowed"><span class="hint">로그인한 계정으로 자동 입력돼요.</span></div>
     </div>
     ${qs.map((q, i) => `
       <div class="field"><label for="jq_${esc(q.id)}">${i + 1}. ${esc(q.title)}${limitText(q) ? ` <span class="text-dim" style="font-weight:400">[${limitText(q)}]</span>` : ""}${q.required ? '<span class="req">*</span>' : ' <span class="text-dim" style="font-weight:400">(선택)</span>'}</label>
         <textarea id="jq_${esc(q.id)}" data-qid="${esc(q.id)}" rows="6" ${q.max ? `maxlength="${q.max + 300}"` : ""}>${esc(prev[q.id] || "")}</textarea>
         <span class="hint cnt" data-cnt="${esc(q.id)}"></span></div>`).join("")}
-    <div class="form-foot">${a ? `<button type="button" class="btn" id="jfBack">취소</button>` : ""}<button class="btn primary" type="submit">${a ? "수정하기" : "제출하기"}</button></div>
+    <div class="consent">
+      <label class="check-line"><input type="checkbox" id="jfAgree" ${a?.consentAt ? "checked" : ""}><span><b class="req-tag">필수</b> 지원서 개인정보 수집·이용에 동의합니다.</span></label>
+      <details><summary>내용 보기</summary><div class="consent-text">수집 항목: 학번, 이름, 전화번호, 이메일, 지원서 답변<br>이용 목적: ASTRO 신입 부원 선발과 결과 안내<br>보유 기간: 선발이 끝난 뒤 6개월 이내 삭제<br>볼 수 있는 사람: 본인과 동아리 운영진(관리자)<br>동의하지 않을 수 있으며, 동의하지 않으면 지원할 수 없어요.</div></details>
+    </div>
+    <p class="hint" id="jfSaved">작성 중인 내용은 이 브라우저에 자동으로 임시저장돼요.</p>
+    <div class="form-foot">${a ? `<button type="button" class="btn" id="jfBack">취소</button>` : ""}<button type="button" class="btn" id="jfSave">${icon("check")} 임시저장</button><button class="btn primary" type="submit">${a ? "수정하기" : "제출하기"}</button></div>
   </form>`;
   const byId = Object.fromEntries(qs.map((q) => [q.id, q]));
   const updateCnt = (ta) => {
@@ -527,6 +594,19 @@ function joinForm(box, a) {
   };
   box.querySelectorAll("textarea[data-qid]").forEach((ta) => { updateCnt(ta); ta.addEventListener("input", () => updateCnt(ta)); });
   $("#jfBack")?.addEventListener("click", () => S.rerender());
+  const collect = () => {
+    const answers = {};
+    box.querySelectorAll("textarea[data-qid]").forEach((ta) => { answers[ta.dataset.qid] = ta.value; });
+    return { studentId: $("#jfS").value, name: $("#jfN").value, phone: $("#jfP").value, answers, at: Date.now() };
+  };
+  let tmr = null;
+  const saveDraft = (manual) => {
+    try { localStorage.setItem(DKEY, JSON.stringify(collect())); const el = $("#jfSaved"); if (el) el.textContent = `임시저장됨 · ${fmtDateTime(Date.now())}`; if (manual) toast("임시저장했어요. 이 브라우저에서 다시 열면 이어서 쓸 수 있어요.", "ok"); }
+    catch { if (manual) toast("이 브라우저에서는 임시저장을 쓸 수 없어요.", "err"); }
+  };
+  box.querySelector("#jf").addEventListener("input", () => { clearTimeout(tmr); tmr = setTimeout(() => saveDraft(false), 700); });
+  $("#jfSave").addEventListener("click", () => saveDraft(true));
+  $("#jfDraftClear")?.addEventListener("click", () => { try { localStorage.removeItem(DKEY); } catch { /* noop */ } toast("임시저장을 지웠어요."); joinForm(box, a); });
   $("#jf").addEventListener("submit", async (e) => {
     e.preventDefault();
     const v = (id) => $("#" + id).value.trim();
@@ -543,17 +623,19 @@ function joinForm(box, a) {
       if (q.max && t.length > q.max) { $("#jq_" + CSS.escape(q.id))?.focus(); return toast(`${i + 1}번 문항은 ${q.max}자 이내로 작성해 주세요. (지금 ${t.length}자)`, "err"); }
       if (q.min && t && t.length < q.min) short.push(`${i + 1}번 (${t.length}자 / 최소 ${q.min}자)`);
     }
+    if (!$("#jfAgree").checked) return toast("지원서 개인정보 수집·이용에 동의해 주세요.", "err");
     if (short.length && !(await confirmDialog(`최소 글자 수보다 짧은 문항이 있어요.\n${short.join("\n")}\n그래도 제출할까요?`, { okText: "제출" }))) return;
     const data = {
       studentId, name, phone, email: u.email,
       answers, questions: qs.map((q) => ({ id: q.id, title: q.title })),
-      status: "pending", updatedAt: S.api.now()
+      status: "pending", updatedAt: S.api.now(), consentAt: new Date().toISOString()
     };
     const btn = e.target.querySelector("button[type=submit]");
     setBtnBusy(btn, true);
     try {
       if (a) await S.api.update("applications", a.id, data);
       else await S.api.add("applications", data);
+      try { localStorage.removeItem(DKEY); } catch { /* noop */ }
       toast(a ? "지원서가 수정되었어요." : "지원서가 제출되었어요!", "ok");
       S.rerender();
     } catch (err) { toast(errMsg(err), "err"); setBtnBusy(btn, false); }

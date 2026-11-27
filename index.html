@@ -2,14 +2,7 @@
 <html lang="ko" data-astro-theme="white">
 <head>
   <meta charset="utf-8">
-  <script>
-    (function () {
-      var t = "white";
-      try { t = localStorage.getItem("astro-theme") || t; } catch (e) {}
-      if (["white", "black", "navy"].indexOf(t) < 0) t = "white";
-      document.documentElement.setAttribute("data-astro-theme", t);
-    })();
-  </script>
+  <script>try { var t = localStorage.getItem("astro-theme"); if (t === "black" || t === "navy") document.documentElement.setAttribute("data-astro-theme", t); } catch (e) {}</script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ASTRO · Bugil Academy</title>
   <meta name="description" content="북일고등학교 항공우주·기계공학 동아리 ASTRO — 하늘을 바라보는 순간, 우리는 더 가까워집니다.">
@@ -23,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=Noto+Sans+KR:wght@300;400;500;700&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="css/style.css?v=202611261642">
+  <link rel="stylesheet" href="css/style.css?v=202611271625">
 </head>
 <body>
   <a class="skip" href="#app">본문 바로가기</a>
@@ -38,6 +31,7 @@
       <a href="#home" data-nav="home">홈</a>
       <a href="#about" data-nav="about">소개</a>
       <a href="#activity" data-nav="activity">활동</a>
+      <a href="#portfolio" data-nav="portfolio">포트폴리오</a>
       <a href="#gallery" data-nav="gallery">갤러리</a>
       <a href="#notice" data-nav="notice">공지사항</a>
       <a href="#community" data-nav="community">커뮤니티</a>
@@ -46,6 +40,7 @@
     </nav>
     <div class="header-actions">
       <div id="authArea" class="auth-area"></div>
+      <a class="pill pill-mob" id="mobJoin" href="#join">가입</a>
       <a class="pill" id="joinPill" href="#join"><span>가입하기</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></a>
       <button class="menu-btn" id="menuBtn" type="button" aria-label="메뉴 열기" aria-expanded="false">
@@ -70,7 +65,7 @@
       </div>
       <nav class="footer-links" aria-label="바로가기">
         <a href="#about">소개</a><a href="#activity">활동</a><a href="#gallery">갤러리</a>
-        <a href="#notice">공지사항</a><a href="#community">커뮤니티</a><a href="#join">가입 신청</a><a href="#mypage">마이페이지 · 테마</a>
+        <a href="#notice">공지사항</a><a href="#community">커뮤니티</a><a href="#portfolio">포트폴리오</a><a href="#join">가입 신청</a><a href="#mypage">마이페이지</a><a href="#terms">이용약관</a><a href="#privacy"><b>개인정보처리방침</b></a>
       </nav>
       <p class="footer-copy">© <span id="year">2026</span> Bugil Academy ASTRO. All rights reserved.</p>
     </div>
@@ -79,6 +74,6 @@
   <div id="modalRoot"></div>
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=202611261642"></script>
+  <script type="module" src="js/app.js?v=202611271625"></script>
 </body>
 </html>

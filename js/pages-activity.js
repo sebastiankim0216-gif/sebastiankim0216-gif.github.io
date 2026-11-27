@@ -1,10 +1,10 @@
 // 활동(달력 + 기록) · 활동 상세 · 갤러리
-import { S, isAdmin, canEdit, isDemo, imageMaxSide, authorFields, normActivity } from "./state.js?v=202611261642";
-import { UPLOAD_LIMITS, ACTIVITY_CATEGORIES, EVENT_CATEGORIES } from "./config.js?v=202611261642";
+import { S, isAdmin, canEdit, isDemo, imageMaxSide, authorFields, normActivity } from "./state.js?v=202611271625";
+import { UPLOAD_LIMITS, ACTIVITY_CATEGORIES, EVENT_CATEGORIES } from "./config.js?v=202611271625";
 import {
   $, $$, esc, richText, excerpt, icon, sparkle, avatar, loading, empty, pageHero, secHead, toast, errMsg, modal,
   confirmDialog, setBtnBusy, fmtDateTime, fmtYmd, ymd, parseYmd, DOW, mediaField, prepareImage, youtubeId, lightbox
-} from "./ui.js?v=202611261642";
+} from "./ui.js?v=202611271625";
 
 export const firstImage = (a) => (a.media || []).find((m) => m.type === "image")?.url || "";
 const mediaCount = (a) => (a.media || []).length;
@@ -41,8 +41,19 @@ export async function renderActivity(app, id) {
   app.innerHTML = `
   ${pageHero({ en: "ACTIVITY", ko: "활동 기록", desc: "달력에서 날짜를 골라 그날의 활동을 확인하세요.", bg: "assets/campus-night.jpg" })}
   <section class="page"><div class="wrap">
-    ${secHead("CALENDAR", "활동 · 일정 달력", isAdmin() ? `<button class="btn" id="eWrite">${icon("calendar")} 일정 추가</button><button class="btn primary" id="aWrite">${icon("plus")} 활동 기록하기</button>` : "", "날짜를 누르면 그날의 일정과 활동 기록을 볼 수 있어요.")}
-    <div class="act-layout">
+    ${secHead("ACTIVITY", "활동 기록 · 일정", isAdmin() ? `<button class="btn" id="eWrite">${icon("calendar")} 일정 추가</button><button class="btn primary" id="aWrite">${icon("plus")} 활동 기록하기</button>` : "", "달력으로 보거나, 목록에서 검색·분류로 찾아보세요.")}
+    <div class="tabs view-tabs" id="viewTabs" role="tablist"><button class="tab" data-view="cal" role="tab">${icon("calendar")} 달력으로 보기</button><button class="tab" data-view="list" role="tab">${icon("search")} 목록 · 검색</button></div>
+    <div id="listView" hidden>
+      <div class="act-filter">
+        <label class="search">${icon("search")}<span class="sr">활동 검색</span><input type="search" id="alQ" placeholder="제목 · 내용 · 장소 검색"></label>
+        <select id="alY" aria-label="연도"><option value="">전체 연도</option></select>
+        <select id="alS" aria-label="정렬"><option value="new">최신순</option><option value="old">오래된순</option></select>
+      </div>
+      <div class="tabs mt-s" id="alC">${["전체", ...ACTIVITY_CATEGORIES].map((c, i) => `<button class="tab${i === 0 ? " active" : ""}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+      <p class="text-dim mt-m" id="alCount" style="font-size:14px"></p>
+      <div class="act-grid" id="alList">${loading()}</div>
+    </div>
+    <div class="act-layout" id="calView">
       <div class="panel hudc">
         <div class="cal-head">
           <div class="cal-title">
@@ -152,6 +163,38 @@ export async function renderActivity(app, id) {
   });
   if (selected) month = selected.slice(0, 7);
   S.reloadCalendar = () => { allActs = null; draw(); };
+
+  // ---- 목록 · 검색 보기 ----
+  let lq = "", lc = "전체", ly = "", ls = "new";
+  async function drawList() {
+    const box = $("#alList");
+    if (!box) return;
+    try { await loadAll(); } catch (e) { box.innerHTML = empty("활동을 불러오지 못했어요", errMsg(e)); return; }
+    const ysel = $("#alY");
+    if (ysel.options.length === 1) {
+      [...new Set(allActs.map((a) => a.date.slice(0, 4)).filter(Boolean))].sort().reverse().forEach((y) => ysel.insertAdjacentHTML("beforeend", `<option value="${esc(y)}">${esc(y)}년</option>`));
+    }
+    const items = allActs
+      .filter((a) => lc === "전체" || (a.category || "기타") === lc)
+      .filter((a) => !ly || a.date.startsWith(ly))
+      .filter((a) => !lq || `${a.title} ${a.content} ${a.place || ""} ${a.authorName || ""}`.toLowerCase().includes(lq))
+      .sort((a, b) => (ls === "new" ? (a.date < b.date ? 1 : -1) : (a.date > b.date ? 1 : -1)));
+    $("#alCount").textContent = `${items.length}건`;
+    box.innerHTML = items.map(actCard).join("") || empty("조건에 맞는 활동이 없어요", "검색어나 분류를 바꿔 보세요.");
+  }
+  const setView = (v) => {
+    S.actView = v;
+    $("#calView").hidden = v !== "cal";
+    $("#listView").hidden = v !== "list";
+    app.querySelectorAll("#viewTabs .tab").forEach((t) => { t.classList.toggle("active", t.dataset.view === v); t.setAttribute("aria-selected", t.dataset.view === v); });
+    if (v === "list") drawList();
+  };
+  $("#viewTabs").addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (b) setView(b.dataset.view); });
+  $("#alQ").addEventListener("input", (e) => { lq = e.target.value.trim().toLowerCase(); drawList(); });
+  $("#alY").addEventListener("change", (e) => { ly = e.target.value; drawList(); });
+  $("#alS").addEventListener("change", (e) => { ls = e.target.value; drawList(); });
+  $("#alC").addEventListener("click", (e) => { const b = e.target.closest("[data-c]"); if (!b) return; lc = b.dataset.c; app.querySelectorAll("#alC .tab").forEach((t) => t.classList.toggle("active", t === b)); drawList(); });
+  setView(S.actView || "cal");
   draw();
 }
 

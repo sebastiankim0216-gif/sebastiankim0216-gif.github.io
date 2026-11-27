@@ -29,11 +29,27 @@ export const SUPABASE = {
   sdk: "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/+esm"
 };
 
-// 2) 운영담당자(OWNER) 지정 콘솔 비밀번호
-//    홈 화면(첫 화면)에서 입력창이 아닌 곳에 키보드로 이 숫자를 치면 '운영담당자 지정 콘솔'이 열립니다.
-//    휴대폰: 홈 화면 왼쪽 아래 로고를 5번 연속으로 누르면 비밀번호 입력창이 뜹니다.
-//    운영담당자 목록은 Firestore config/owners 에 저장됩니다. (firestore.rules 의 비밀번호도 같게 유지)
-export const OWNER_CONSOLE_KEY = "100120";
+// 2) 운영담당자 지정 콘솔 — 비밀번호는 코드에 적지 않고 해시(SHA-256)만 둡니다.
+//    최종 확인은 Firebase 보안 규칙(비공개)에서 합니다.
+export const CONSOLE_HASHES = {
+  stage1: "a9e965a1d0b7e35a1eef1f958044b414d79e2d5ef757244e9f38efccf24d417e",
+  stage2: "7ac451120f90b7645f9f71a7dff85dec119155e3394969409c6a00b307a65bdb"
+};
+export const CONSOLE_STAGE1_LENGTH = 6;
+// 3단계 키패드에 섞어서 보여 줄 글자 (정답 글자는 이 안에 들어 있어야 함)
+export const CONSOLE_KEYPAD = ["최","시","화","김","이","박","정","윤","한","서","민","준","강","조","장","임","오","신","권","황","안","송","전","홍","유","고","문","양","손","배","백","허","남","심","노","하"];
+
+// 약관 · 개인정보 동의 버전 (내용을 바꾸면 날짜를 바꿔서 다시 동의 받기)
+export const CONSENT_VERSION = "2026-11-27";
+
+// 커뮤니티: 한 사람이 하루에 쓸 수 있는 글 수
+export const COMMUNITY_DAILY_LIMIT = 15;
+
+// 포트폴리오 분류
+export const PORTFOLIO_TYPES = ["프로젝트", "수상", "전람회 출품", "탐구 보고서", "기타"];
+
+// 지원서 평가 만점
+export const SCORE_MAX = 30;
 
 // 3) 특정 도메인 계정만 로그인 허용하려면 입력 (예: "bugil.hs.kr"). 비워두면 모두 허용
 export const ALLOWED_EMAIL_DOMAIN = "";

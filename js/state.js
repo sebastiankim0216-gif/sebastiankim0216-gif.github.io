@@ -1,6 +1,6 @@
 // 앱 전역 상태와 권한 도우미
 // 권한: owner(운영담당자) > admin(관리자) > user(로그인 사용자)
-import { DEFAULT_SITE, DEFAULT_BANNERS, DEFAULT_QUESTIONS, UPLOAD_LIMITS, OWNER_CONSOLE_KEY } from "./config.js?v=202611261642";
+import { DEFAULT_SITE, DEFAULT_BANNERS, DEFAULT_QUESTIONS, UPLOAD_LIMITS } from "./config.js?v=202611271625";
 
 export const S = {
   api: null,
@@ -56,11 +56,22 @@ export async function loadOwners() {
   catch { S.owners = []; }
   return S.owners;
 }
-export async function saveOwners(emails) {
-  const list = [...new Set(emails.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
-  await S.api.set("config", "owners", { emails: list, key: OWNER_CONSOLE_KEY, updatedAt: S.api.now() }, false);
-  S.owners = list;
-  return list;
+export async function saveOwners(secret, emails) {
+  S.owners = await S.api.saveOwners(secret, emails);
+  return S.owners;
+}
+export const isMuted = () => S.user?.muted === true;
+
+// 이름 가리기: 윤도서 → 윤O서, 김별 → 김O
+export function maskName(n) {
+  const c = [...String(n || "").trim()];
+  if (c.length <= 1) return c.join("");
+  if (c.length === 2) return c[0] + "O";
+  return c[0] + "O".repeat(c.length - 2) + c[c.length - 1];
+}
+export async function sha256(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export async function saveBanners(items) {

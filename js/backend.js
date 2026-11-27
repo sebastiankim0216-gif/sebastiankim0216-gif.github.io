@@ -10,7 +10,7 @@
 //  api.upload(file, folder, onProgress) → { url, path, type, name, size }
 //  api.deleteFile(path)
 
-import { FIREBASE_CONFIG, FIREBASE_SDK_VERSION, ALLOWED_EMAIL_DOMAIN, SUPABASE, UPLOAD_LIMITS, OWNER_CONSOLE_KEY } from "./config.js?v=202611261642";
+import { FIREBASE_CONFIG, FIREBASE_SDK_VERSION, ALLOWED_EMAIL_DOMAIN, SUPABASE, UPLOAD_LIMITS, CONSENT_VERSION } from "./config.js?v=202611271625";
 
 export function isConfigured() {
   return !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId);
@@ -18,7 +18,7 @@ export function isConfigured() {
 
 export async function createBackend() {
   if (isConfigured()) return createFirebase();
-  const { createDemo } = await import("./demo-backend.js?v=202611261642");
+  const { createDemo } = await import("./demo-backend.js?v=202611271625");
   return createDemo();
 }
 
@@ -109,9 +109,18 @@ async function createFirebase() {
     if (role === "user" && u.emailVerified) {
       try { const a = await fs.getDoc(ref("admins", email)); if (a.exists()) role = "admin"; } catch (e) { console.warn("admin check", e); }
     }
-    let theme = "";
-    try { const p = await fs.getDoc(ref("users", u.uid)); if (p.exists()) theme = p.data().theme || ""; } catch { /* 규칙상 없을 수 있음 */ }
-    return { uid: u.uid, email, name: u.displayName || email.split("@")[0] || "사용자", photo: u.photoURL || "", role, theme, verified: !!u.emailVerified };
+    // 회원 정보 (가입 동의, 이용 제한)
+    let prof = null;
+    try { const p = await fs.getDoc(ref("users", u.uid)); if (p.exists()) prof = p.data(); } catch (e) { console.warn("profile", e); }
+    if (prof) {
+      fs.updateDoc(ref("users", u.uid), { lastLoginAt: fs.serverTimestamp(), email, photo: u.photoURL || prof.photo || "" }).catch(() => {});
+    }
+    return {
+      uid: u.uid, email, name: prof?.name || u.displayName || email.split("@")[0] || "사용자", photo: u.photoURL || "", role,
+      verified: !!u.emailVerified, provider: u.providerData?.[0]?.providerId || "password",
+      registered: !!prof, consented: prof?.consents?.version === CONSENT_VERSION,
+      banned: prof?.banned === true, banReason: prof?.banReason || "", muted: prof?.muted === true
+    };
   }
 
   authM.onAuthStateChanged(auth, async (u) => {
@@ -151,7 +160,39 @@ async function createFirebase() {
       try { await authM.sendEmailVerification(cred.user); } catch { /* 선택 */ }
     },
     async resetPassword(email) { await authM.sendPasswordResetEmail(auth, email); },
-    async saveTheme(theme) { if (current) { try { await fs.setDoc(ref("users", current.uid), { theme }, { merge: true }); } catch { /* 선택 기능 */ } } },
+    // 회원 정보 저장 (가입 동의 포함)
+    async saveProfile(data) {
+      if (!fbUser) throw new Error("로그인이 필요해요.");
+      const base = { email: String(fbUser.email || "").toLowerCase(), photo: fbUser.photoURL || "", lastLoginAt: fs.serverTimestamp() };
+      if (!current?.registered) base.createdAt = fs.serverTimestamp();
+      await fs.setDoc(ref("users", fbUser.uid), { ...base, ...data }, { merge: true });
+      if (data.name) { try { await authM.updateProfile(fbUser, { displayName: data.name }); } catch { /* 선택 */ } }
+      current = await syncUser(fbUser); emit();
+    },
+    async sendVerification() { if (fbUser) await authM.sendEmailVerification(fbUser); },
+    async deleteAccount() {
+      if (!fbUser) return;
+      await fs.deleteDoc(ref("users", fbUser.uid)).catch(() => {});
+      await authM.deleteUser(fbUser);
+    },
+    // 운영담당자 콘솔: 최종 비밀번호는 서버(보안 규칙)에서만 확인
+    async ownerProbe(secret) {
+      try { await fs.addDoc(col("owner_changes"), { key: secret, probe: true, at: fs.serverTimestamp() }); return true; }
+      catch (e) { if (String(e.code || "").includes("permission-denied")) return false; throw e; }
+    },
+    async saveOwners(secret, emails) {
+      const list = [...new Set(emails.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
+      const changeRef = fs.doc(col("owner_changes"));
+      const batch = fs.writeBatch(db);
+      batch.set(changeRef, { key: secret, emails: list, at: fs.serverTimestamp() });
+      batch.set(ref("config", "owners"), { emails: list, changeId: changeRef.id, updatedAt: fs.serverTimestamp() });
+      await batch.commit();
+      if (SUPABASE.url && SUPABASE.anonKey) {
+        try { const sb = await supabase(); await sb.rpc("astro_set_owners", { p_secret: secret, p_emails: list }); } catch (e) { console.warn("supabase owners", e); }
+      }
+      if (fbUser) { current = await syncUser(fbUser); emit(); }
+      return list;
+    },
     async signOut() { await authM.signOut(auth); },
     async reloadMe() { if (fbUser) { current = await syncUser(fbUser); emit(); } return current; },
 
@@ -207,7 +248,7 @@ async function createFirebase() {
       if (!SUPABASE.url || !SUPABASE.anonKey) return { ok: false, reason: "Supabase 미설정" };
       const sb = await supabase();
       const list = [...new Set(emails.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
-      const { data, error } = await sb.rpc("astro_set_uploaders", { p_key: OWNER_CONSOLE_KEY, p_emails: list });
+      const { data, error } = await sb.rpc("astro_set_uploaders", { p_emails: list });
       if (error) throw sbError(error);
       return { ok: true, count: data ?? list.length };
     }

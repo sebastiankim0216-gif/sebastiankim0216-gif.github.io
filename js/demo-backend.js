@@ -1,7 +1,9 @@
 // 데모 모드: Firebase 설정 전, 이 브라우저 안에서만 동작하는 가짜 백엔드입니다.
 // 모든 데이터는 localStorage 에 저장되며 다른 사람에게 보이지 않습니다.
 
-const KEY = "astro-demo-v5";
+const KEY = "astro-demo-v6";
+import { CONSENT_VERSION } from "./config.js?v=202611271625";
+const sha = async (t) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t))), (b) => b.toString(16).padStart(2, "0")).join("");
 const SESSION_KEY = "astro-demo-user";
 const NOW = { __now: 1 };
 
@@ -25,7 +27,7 @@ export const DEMO_IDENTITIES = [
 function seed() {
   const users = {};
   const addUser = (uid, name, email, role, extra = {}) => {
-    users[uid] = { email, name, photo: "", role, createdAt: ago(60 + Object.keys(users).length * 3), lastLoginAt: ago(1), ...extra };
+    users[uid] = { email, name, photo: "", createdAt: ago(60 + Object.keys(users).length * 3), lastLoginAt: ago(1), consents: { terms: true, privacy: true, age14: true, version: CONSENT_VERSION }, ...extra };
   };
   addUser("demo-admin", "김별", "byeol.kim@astro.demo", "admin", { realName: "김별", studentNo: "20301" });
   addUser("demo-member", "이은하", "eunha.lee@astro.demo", "member", { realName: "이은하", studentNo: "20514" });
@@ -82,7 +84,7 @@ function seed() {
   addAct(17, "쌍둥이자리 유성우 관측 (예정)", "운동장", "올해 마지막 유성우 관측입니다. 참여 신청은 공지사항을 확인해 주세요.", [], "demo-admin", "김별");
 
   const events = { [rid()]: { title: "정기 회의", date: ymd(3), endDate: null, note: "과학관 실험실", category: 0, createdBy: "byeol.kim@astro.demo", createdAt: ago(1) } };
-  return { cols: { users, applications, admins, notices, community_posts: posts, ...comments, activity_posts: activities, events, config: { owners: { emails: ["byeol.kim@astro.demo"], key: "100120" } } } };
+  return { cols: { users, applications, admins, notices, community_posts: posts, ...comments, activity_posts: activities, events, config: { owners: { emails: ["byeol.kim@astro.demo"] } } } };
 }
 
 export function createDemo() {
@@ -116,7 +118,8 @@ export function createDemo() {
     if (!u) return null;
     const owners = store.cols.config?.owners?.emails || [];
     const role = owners.includes(u.email) ? "owner" : store.cols.admins?.[u.email] ? "admin" : "user";
-    return { uid, email: u.email, name: u.name, photo: u.photo || "", role, theme: u.theme || "" };
+    return { uid, email: u.email, name: u.name, photo: u.photo || "", role, verified: true, provider: "demo", registered: true,
+      consented: u.consents?.version === CONSENT_VERSION, banned: u.banned === true, banReason: u.banReason || "", muted: u.muted === true };
   }
   const emit = () => listeners.forEach((cb) => cb(current));
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -147,7 +150,16 @@ export function createDemo() {
       try { sessionStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
       emit();
     },
-    async saveTheme(theme) { if (current && store.cols.users[current.uid]) { store.cols.users[current.uid].theme = theme; persist(); } },
+    async saveProfile(data) { if (!current) return; store.cols.users[current.uid] = { ...store.cols.users[current.uid], ...data }; persist(); current = makeUser(current.uid); emit(); },
+    async sendVerification() {},
+    async deleteAccount() { if (!current) return; delete store.cols.users[current.uid]; persist(); current = null; try { sessionStorage.removeItem(SESSION_KEY); } catch { /* noop */ } emit(); },
+    async ownerProbe(secret) { return String(secret).split("|").length === 3 && !String(secret).endsWith("|"); },
+    async saveOwners(secret, emails) {
+      const list = [...new Set(emails.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
+      colOf("config").owners = { emails: list, updatedAt: Date.now() }; persist();
+      if (current) { current = makeUser(current.uid); emit(); }
+      return list;
+    },
     async reloadMe() { if (current) { current = makeUser(current.uid); emit(); } return current; },
     reset() {
       store = seed();
